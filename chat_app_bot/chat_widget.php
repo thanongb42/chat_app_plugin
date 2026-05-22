@@ -120,23 +120,27 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',Tahoma,sans-serif;b
 
 .sender-name{font-size:10px;color:var(--accentL);font-weight:600;margin-bottom:2px}
 
-/* ─── Welcome panel ─── */
+/* ─── Welcome panel (scrollable area) ─── */
 #welcome-panel{
-  flex:1;overflow-y:auto;display:none;flex-direction:column;align-items:center;
-  padding:20px 14px 10px;
+  flex:1;overflow-y:auto;display:none;flex-direction:column;
+  padding:20px 14px 12px;
+  /* ไม่ใช้ align-items:center — ทำให้ overflow-y ไม่ทำงาน */
 }
 #welcome-panel::-webkit-scrollbar{width:3px}
-#welcome-panel::-webkit-scrollbar-thumb{background:var(--border)}
+#welcome-panel::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 .wp-hero{text-align:center;margin-bottom:18px;padding-top:4px}
 .wp-logo{font-size:46px;margin-bottom:10px;filter:drop-shadow(0 2px 8px rgba(66,165,245,.3))}
 .wp-title{font-size:17px;font-weight:700;color:var(--text);margin-bottom:5px}
 .wp-sub{font-size:12px;color:var(--text2);line-height:1.6}
-.wp-list{width:100%;border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:12px;background:var(--surface)}
+.wp-list{
+  width:100%;border:1px solid var(--border);border-radius:12px;
+  overflow:hidden;background:var(--surface);
+}
 .wp-item{
   display:flex;align-items:center;gap:10px;width:100%;
   padding:12px 14px;border:none;border-bottom:1px solid var(--border);
   background:none;color:var(--text);font-family:inherit;font-size:12px;
-  text-align:left;cursor:pointer;transition:.15s;
+  text-align:left;cursor:pointer;transition:.15s;box-sizing:border-box;
 }
 .wp-item:last-child{border-bottom:none}
 .wp-item:hover{background:var(--surface2)}
@@ -150,8 +154,15 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',Tahoma,sans-serif;b
   font-size:11px;color:var(--text2);transition:.15s;font-style:normal;
 }
 .wp-item:hover .wp-arrow{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* ─── Chip bar (pinned above inputBar, ไม่ scroll ตาม welcome panel) ─── */
+#wp-chips-bar{
+  display:none;flex-shrink:0;
+  padding:8px 12px 6px;background:var(--surface);
+  border-top:1px solid var(--border);
+}
 .wp-chips{
-  display:flex;gap:6px;width:100%;overflow-x:auto;padding:2px 0 4px;
+  display:flex;gap:6px;overflow-x:auto;padding:2px 0;
   scrollbar-width:none;flex-wrap:nowrap;
 }
 .wp-chips::-webkit-scrollbar{display:none}
@@ -393,7 +404,7 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',Tahoma,sans-serif;b
     <div class="room-tab" data-id="3">❓ ถาม-ตอบ</div>
   </div>
 
-  <!-- Welcome panel — shown before any messages -->
+  <!-- Welcome panel — suggestion list (scrollable) -->
   <div id="welcome-panel">
     <div class="wp-hero">
       <div class="wp-logo">🏛️</div>
@@ -403,6 +414,10 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',Tahoma,sans-serif;b
     <div class="wp-list" id="wp-list">
       <div style="text-align:center;padding:20px;color:var(--text2);font-size:12px">กำลังโหลด...</div>
     </div>
+  </div>
+
+  <!-- Chip bar — pinned, always above inputBar (not inside scroll area) -->
+  <div id="wp-chips-bar">
     <div class="wp-chips" id="wp-chips"></div>
   </div>
 
@@ -524,12 +539,14 @@ async function newChat() {
 
 // ─── Welcome panel show/hide ──────────────────────
 function showWelcome() {
-  document.getElementById('welcome-panel').style.display = 'flex';
-  document.getElementById('msgArea').style.display       = 'none';
+  document.getElementById('welcome-panel').style.display  = 'flex';
+  document.getElementById('wp-chips-bar').style.display  = 'block';
+  document.getElementById('msgArea').style.display        = 'none';
 }
 function hideWelcome() {
-  document.getElementById('welcome-panel').style.display = 'none';
-  document.getElementById('msgArea').style.display       = '';
+  document.getElementById('welcome-panel').style.display  = 'none';
+  document.getElementById('wp-chips-bar').style.display  = 'none';
+  document.getElementById('msgArea').style.display        = '';
 }
 
 // ─── Init ─────────────────────────────────────────
