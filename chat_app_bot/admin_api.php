@@ -176,7 +176,7 @@ case 'room_messages':
 
     if ($lastId === 0) {
         $stmt = $pdo->prepare("
-            SELECT id, username, display_name, avatar_color, message, msg_type,
+            SELECT id, username, display_name, avatar_color, message, msg_type, metadata,
                    DATE_FORMAT(created_at,'%H:%i') AS time_str
             FROM chat_messages WHERE room_id=?
             ORDER BY created_at DESC LIMIT 80
@@ -185,7 +185,7 @@ case 'room_messages':
         $msgs = array_reverse($stmt->fetchAll());
     } else {
         $stmt = $pdo->prepare("
-            SELECT id, username, display_name, avatar_color, message, msg_type,
+            SELECT id, username, display_name, avatar_color, message, msg_type, metadata,
                    DATE_FORMAT(created_at,'%H:%i') AS time_str
             FROM chat_messages WHERE room_id=? AND id>?
             ORDER BY id ASC LIMIT 50
@@ -237,13 +237,15 @@ case 'pattern_save':
     $priority  = (int)($_POST['priority'] ?? 50);
     $isActive  = (int)($_POST['is_active'] ?? 1);
     $useAi     = (int)($_POST['use_ai'] ?? 0);
+    $choicesRaw = $_POST['choices'] ?? '[]';
+    $choices    = (json_decode($choicesRaw) !== null) ? $choicesRaw : '[]';
     if (!$pattern) fail('กรุณาระบุ Pattern');
     if ($id > 0) {
-        $pdo->prepare("UPDATE chat_bot_patterns SET pattern=?,match_type=?,response=?,room_id=?,priority=?,is_active=?,use_ai=? WHERE id=?")
-            ->execute([$pattern,$matchType,$response,$roomId2,$priority,$isActive,$useAi,$id]);
+        $pdo->prepare("UPDATE chat_bot_patterns SET pattern=?,match_type=?,response=?,choices=?,room_id=?,priority=?,is_active=?,use_ai=? WHERE id=?")
+            ->execute([$pattern,$matchType,$response,$choices,$roomId2,$priority,$isActive,$useAi,$id]);
     } else {
-        $pdo->prepare("INSERT INTO chat_bot_patterns (pattern,match_type,response,room_id,priority,is_active,use_ai) VALUES (?,?,?,?,?,?,?)")
-            ->execute([$pattern,$matchType,$response,$roomId2,$priority,$isActive,$useAi]);
+        $pdo->prepare("INSERT INTO chat_bot_patterns (pattern,match_type,response,choices,room_id,priority,is_active,use_ai) VALUES (?,?,?,?,?,?,?,?)")
+            ->execute([$pattern,$matchType,$response,$choices,$roomId2,$priority,$isActive,$useAi]);
         $id = (int)$pdo->lastInsertId();
     }
     ok(['id' => $id]);
@@ -310,7 +312,8 @@ case 'config':
 case 'config_save':
     $keys = ['bot_name','bot_color','bot_enabled','ai_enabled','ai_provider',
              'claude_api_key','claude_model','openai_api_key','ai_system_prompt',
-             'reply_delay_ms'];
+             'reply_delay_ms',
+             'image_reply','image_use_ai','location_reply'];
     foreach ($keys as $k) {
         if (!array_key_exists($k, $_POST)) continue;
         $v = $_POST[$k];
@@ -380,6 +383,66 @@ case 'notify_log':
         FROM chat_notifications
         ORDER BY created_at DESC LIMIT $lim
     ")->fetchAll());
+
+// ── MENU ITEMS (quick reply menu) ────────────────
+case 'menu_list':
+    ok($pdo->query("
+        SELECT m.*,
+          (SELECT p.response FROM chat_bot_patterns p
+           WHERE p.pattern = m.message_text AND p.match_type = 'contains' LIMIT 1) AS bot_response
+        FROM chat_menu_items m
+        ORDER BY m.sort_order ASC, m.id ASC
+    ")->fetchAll());
+
+case 'menu_save':
+    $mid         = (int)($_POST['id']          ?? 0);
+    $icon        = trim($_POST['icon']         ?? '📋');
+    $label       = trim($_POST['label']        ?? '');
+    $msgText     = trim($_POST['message_text'] ?? '');
+    $order       = (int)($_POST['sort_order']  ?? 50);
+    $active      = (int)($_POST['is_active']   ?? 1);
+    $botResponse = trim($_POST['bot_response'] ?? '');
+    $useAi       = (int)($_POST['use_ai']      ?? 0);
+
+    if (!$label || !$msgText) fail('label และ message_text ต้องระบุ');
+
+    if ($mid > 0) {
+        $pdo->prepare("UPDATE chat_menu_items SET icon=?,label=?,message_text=?,sort_order=?,is_active=? WHERE id=?")
+            ->execute([$icon, $label, $msgText, $order, $active, $mid]);
+    } else {
+        $pdo->prepare("INSERT INTO chat_menu_items (icon,label,message_text,sort_order,is_active) VALUES (?,?,?,?,?)")
+            ->execute([$icon, $label, $msgText, $order, $active]);
+        $mid = (int)$pdo->lastInsertId();
+    }
+
+    // Auto-sync bot pattern: สร้าง/อัปเดต pattern ที่ match กับ message_text นี้
+    if ($botResponse !== '' || $useAi) {
+        $stmt = $pdo->prepare("SELECT id FROM chat_bot_patterns WHERE pattern=? AND match_type='contains' LIMIT 1");
+        $stmt->execute([$msgText]);
+        $patternId = $stmt->fetchColumn();
+        if ($patternId) {
+            $pdo->prepare("UPDATE chat_bot_patterns SET response=?, use_ai=?, is_active=?, priority=60 WHERE id=?")
+                ->execute([$botResponse, $useAi, $active, $patternId]);
+        } else {
+            $pdo->prepare("INSERT INTO chat_bot_patterns (pattern,match_type,response,priority,is_active,use_ai) VALUES (?,?,?,60,?,?)")
+                ->execute([$msgText, 'contains', $botResponse, $active, $useAi]);
+        }
+    }
+
+    ok(['id' => $mid]);
+
+case 'menu_delete':
+    $mid = (int)($_POST['id'] ?? 0);
+    if (!$mid) fail('id required');
+    $pdo->prepare("DELETE FROM chat_menu_items WHERE id=?")->execute([$mid]);
+    ok();
+
+case 'menu_toggle':
+    $mid = (int)($_POST['id'] ?? 0);
+    if (!$mid) fail('id required');
+    $pdo->prepare("UPDATE chat_menu_items SET is_active=!is_active WHERE id=?")->execute([$mid]);
+    $a = (int)$pdo->query("SELECT is_active FROM chat_menu_items WHERE id=$mid")->fetchColumn();
+    ok(['active' => $a]);
 
 // ── RESOLVE LOG ENTRY ────────────────────────────
 case 'resolve_log':

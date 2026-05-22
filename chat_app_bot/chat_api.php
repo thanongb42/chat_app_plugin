@@ -105,7 +105,7 @@ try {
             if ($lastId === 0) {
                 // โหลดข้อความล่าสุด
                 $stmt = $pdo->prepare("
-                    SELECT id, username, display_name, avatar_color, message, msg_type,
+                    SELECT id, username, display_name, avatar_color, message, msg_type, metadata,
                            DATE_FORMAT(created_at, '%H:%i') AS time_str,
                            created_at
                     FROM chat_messages
@@ -118,7 +118,7 @@ try {
             } else {
                 // Polling — ดึงข้อความใหม่หลัง last_id
                 $stmt = $pdo->prepare("
-                    SELECT id, username, display_name, avatar_color, message, msg_type,
+                    SELECT id, username, display_name, avatar_color, message, msg_type, metadata,
                            DATE_FORMAT(created_at, '%H:%i') AS time_str,
                            created_at
                     FROM chat_messages
@@ -181,12 +181,20 @@ try {
                 $roomName = $roomName->fetchColumn() ?: "ห้อง #{$roomId}";
 
                 if ($result) {
+                    $metadata = null;
+                    if (!empty($result['choices'])) {
+                        $metadata = json_encode(
+                            ['choices' => $result['choices']],
+                            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+                        );
+                    }
                     ChatBotEngine::insertBotMessage(
                         $pdo, $roomId,
                         $bot->getBotName(),
                         $bot->getBotColor(),
                         $result['response'],
-                        $bot->getDelayMs()
+                        $bot->getDelayMs(),
+                        $metadata
                     );
                     // Bot fallback → แจ้งเตือน
                     if ($result['type'] === 'fallback') {
@@ -245,6 +253,111 @@ try {
                     ->execute([$_SESSION[CHAT_SESSION_NAME]['id']]);
             }
             jsonResponse(['success' => true, 'time' => date('H:i:s')]);
+
+        // ─────────────────────────────────────
+        // SEND IMAGE
+        // ─────────────────────────────────────
+        case 'send_image':
+            if (empty($_SESSION[CHAT_SESSION_NAME])) {
+                jsonResponse(['success' => false, 'error' => 'กรุณาเข้าสู่ระบบ'], 401);
+            }
+            $user   = $_SESSION[CHAT_SESSION_NAME];
+            $roomId = (int)($_POST['room_id'] ?? 1);
+            $file   = $_FILES['image'] ?? null;
+
+            if (!$file || $file['error'] !== UPLOAD_ERR_OK) {
+                jsonResponse(['success' => false, 'error' => 'ไม่พบไฟล์ที่อัปโหลด']);
+            }
+            if ($file['size'] > 5 * 1024 * 1024) {
+                jsonResponse(['success' => false, 'error' => 'ไฟล์ใหญ่เกิน 5MB']);
+            }
+
+            // ตรวจ MIME type จากเนื้อไฟล์จริง (ไม่ใช่ extension)
+            $finfo = new finfo(FILEINFO_MIME_TYPE);
+            $mime  = $finfo->file($file['tmp_name']);
+            $allowed = ['image/jpeg' => 'jpg', 'image/png' => 'png',
+                        'image/gif' => 'gif', 'image/webp' => 'webp'];
+            if (!isset($allowed[$mime])) {
+                jsonResponse(['success' => false, 'error' => 'ไฟล์ต้องเป็นรูปภาพ (jpg/png/gif/webp)']);
+            }
+
+            $uploadDir = __DIR__ . '/uploads/chat/';
+            if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+
+            $filename = bin2hex(random_bytes(16)) . '.' . $allowed[$mime];
+            if (!move_uploaded_file($file['tmp_name'], $uploadDir . $filename)) {
+                jsonResponse(['success' => false, 'error' => 'บันทึกไฟล์ไม่สำเร็จ']);
+            }
+
+            $imgPath = 'uploads/chat/' . $filename;
+            $pdo = getChatDB();
+            $pdo->prepare("
+                INSERT INTO chat_messages (room_id, user_id, username, display_name, avatar_color, message, msg_type)
+                VALUES (?,?,?,?,?,?,'image')
+            ")->execute([$roomId, $user['id'], $user['username'], $user['display_name'], $user['avatar_color'], $imgPath]);
+
+            // Bot ตอบขอบคุณรูปภาพ (+ Claude Vision ถ้าเปิด AI)
+            try {
+                require_once __DIR__ . '/chat_bot_engine.php';
+                $bot    = new ChatBotEngine($pdo);
+                $result = $bot->processImage($imgPath, $user['display_name'], $roomId);
+                if ($result) {
+                    ChatBotEngine::insertBotMessage(
+                        $pdo, $roomId, $bot->getBotName(), $bot->getBotColor(),
+                        $result['response'], $bot->getDelayMs()
+                    );
+                }
+            } catch (Throwable $e) { error_log('Bot image error: ' . $e->getMessage()); }
+
+            jsonResponse(['success' => true]);
+
+        // ─────────────────────────────────────
+        // SEND LOCATION
+        // ─────────────────────────────────────
+        case 'send_location':
+            if (empty($_SESSION[CHAT_SESSION_NAME])) {
+                jsonResponse(['success' => false, 'error' => 'กรุณาเข้าสู่ระบบ'], 401);
+            }
+            $user   = $_SESSION[CHAT_SESSION_NAME];
+            $roomId = (int)($_POST['room_id'] ?? 1);
+            $lat    = (float)($_POST['lat'] ?? 0);
+            $lng    = (float)($_POST['lng'] ?? 0);
+            $acc    = (float)($_POST['accuracy'] ?? 0);
+
+            if (($lat === 0.0 && $lng === 0.0) || $lat < -90 || $lat > 90 || $lng < -180 || $lng > 180) {
+                jsonResponse(['success' => false, 'error' => 'พิกัดไม่ถูกต้อง']);
+            }
+
+            $locArr  = ['lat' => round($lat, 7), 'lng' => round($lng, 7), 'acc' => round($acc, 1)];
+            $locData = json_encode($locArr, JSON_UNESCAPED_UNICODE);
+            $pdo = getChatDB();
+            $pdo->prepare("
+                INSERT INTO chat_messages (room_id, user_id, username, display_name, avatar_color, message, msg_type)
+                VALUES (?,?,?,?,?,?,'location')
+            ")->execute([$roomId, $user['id'], $user['username'], $user['display_name'], $user['avatar_color'], $locData]);
+
+            // Bot ตอบรับตำแหน่งพร้อมชื่อสถานที่จริง
+            try {
+                require_once __DIR__ . '/chat_bot_engine.php';
+                $bot    = new ChatBotEngine($pdo);
+                $result = $bot->processLocation($locArr, $user['display_name'], $roomId);
+                if ($result) {
+                    ChatBotEngine::insertBotMessage(
+                        $pdo, $roomId, $bot->getBotName(), $bot->getBotColor(),
+                        $result['response'], $bot->getDelayMs()
+                    );
+                }
+            } catch (Throwable $e) { error_log('Bot location error: ' . $e->getMessage()); }
+
+            jsonResponse(['success' => true]);
+
+        // ─────────────────────────────────────
+        // MENU ITEMS (quick reply menu)
+        // ─────────────────────────────────────
+        case 'menu_items':
+            $pdo   = getChatDB();
+            $items = $pdo->query("SELECT id, icon, label, message_text FROM chat_menu_items WHERE is_active=1 ORDER BY sort_order ASC, id ASC")->fetchAll();
+            jsonResponse(['success' => true, 'items' => $items]);
 
         default:
             jsonResponse(['error' => 'Unknown action'], 400);

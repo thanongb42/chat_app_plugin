@@ -242,6 +242,7 @@ select option{background:var(--s2)}
       </div>
       <div class="nav-sep"></div>
       <div class="nav-item" data-tab="patterns" onclick="switchTab(this)">❓ จัดการ Q&A</div>
+      <div class="nav-item" data-tab="menu" onclick="switchTab(this)">📱 เมนูลัด Chat</div>
       <div class="nav-item" data-tab="config" onclick="switchTab(this)">⚙️ ตั้งค่า Bot</div>
       <div class="nav-item" data-tab="log" onclick="switchTab(this)">📋 Bot Log</div>
     </nav>
@@ -414,6 +415,49 @@ select option{background:var(--s2)}
       </div>
 
       <!-- ════════════════════════════════════════ -->
+      <!-- TAB: MENU (quick reply)                 -->
+      <!-- ════════════════════════════════════════ -->
+      <div class="tab-panel" id="tab-menu">
+        <div class="scroll-area">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+            <h3 style="font-size:14px;font-weight:700">📱 เมนูลัด Chat (LINE-style)</h3>
+            <div style="font-size:12px;color:var(--muted)">ประชาชนกดปุ่ม ☰ แล้วเลือกหัวข้อได้เลย</div>
+            <div style="margin-left:auto">
+              <button class="btn btn-green" onclick="openMenuModal()">+ เพิ่มเมนูใหม่</button>
+            </div>
+          </div>
+
+          <!-- Preview -->
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-title" style="margin-bottom:10px">👁 ตัวอย่างหน้าตา</div>
+            <div style="background:#0f1923;border-radius:10px;padding:10px;max-width:280px">
+              <div style="font-size:10px;color:#8fa3bc;font-weight:600;margin-bottom:8px;letter-spacing:.4px;text-transform:uppercase">⚡ เลือกหัวข้อที่ต้องการถาม</div>
+              <div id="menu-preview" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px"></div>
+            </div>
+          </div>
+
+          <div class="card" style="padding:0;overflow:hidden">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th style="width:40px">On</th>
+                  <th style="width:50px">Icon</th>
+                  <th>Label</th>
+                  <th>ข้อความที่ส่ง</th>
+                  <th>Bot ตอบกลับ</th>
+                  <th style="width:60px">ลำดับ</th>
+                  <th style="width:100px">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody id="menu-body">
+                <tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">กำลังโหลด...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════════════════════════════════════════ -->
       <!-- TAB: CONFIG                             -->
       <!-- ════════════════════════════════════════ -->
       <div class="tab-panel" id="tab-config">
@@ -477,6 +521,31 @@ select option{background:var(--s2)}
               <div class="field" style="grid-column:1/-1">
                 <label>AI System Prompt (บุคลิก Bot)</label>
                 <textarea id="cf-prompt" style="min-height:110px"></textarea>
+              </div>
+            </div>
+
+            <hr style="border-color:var(--border);margin:18px 0">
+            <div class="card-title">📷 ตอบกลับรูปภาพและตำแหน่ง</div>
+            <div class="alert alert-warn" style="margin-bottom:14px;font-size:12px">
+              ใช้ <code style="background:rgba(255,255,255,.1);padding:1px 5px;border-radius:3px">{name}</code> = ชื่อผู้ใช้ &nbsp;|&nbsp;
+              <code style="background:rgba(255,255,255,.1);padding:1px 5px;border-radius:3px">{address}</code> = ชื่อที่อยู่ (location เท่านั้น)
+            </div>
+            <div class="form-row" style="margin-bottom:14px">
+              <div class="field" style="grid-column:1/-1">
+                <label style="display:flex;align-items:center;justify-content:space-between">
+                  <span>📷 ข้อความตอบกลับเมื่อรับรูปภาพ</span>
+                  <label style="display:flex;align-items:center;gap:6px;font-weight:400;text-transform:none;letter-spacing:0;cursor:pointer">
+                    <input type="checkbox" id="cf-image-ai" style="accent-color:var(--accentL)">
+                    <span style="font-size:11px;color:var(--muted)">🤖 ให้ Claude วิเคราะห์รูปแทน (ต้องตั้ง API Key)</span>
+                  </label>
+                </label>
+                <textarea id="cf-image-reply" style="min-height:80px"
+                  placeholder="ขอบคุณสำหรับรูปภาพนะครับ {name} 📷&#10;ทีมงานจะตรวจสอบและติดต่อกลับโดยเร็วที่สุดครับ 🙏"></textarea>
+              </div>
+              <div class="field" style="grid-column:1/-1">
+                <label>📍 ข้อความตอบกลับเมื่อรับตำแหน่ง</label>
+                <textarea id="cf-location-reply" style="min-height:80px"
+                  placeholder="รับทราบตำแหน่งแล้วครับ {name} 📍&#10;{address}&#10;เจ้าหน้าที่จะเดินทางไปตรวจสอบโดยเร็วครับ 🙏"></textarea>
               </div>
             </div>
 
@@ -561,6 +630,17 @@ select option{background:var(--s2)}
           <label>ข้อความตอบกลับ <span style="color:var(--muted)">(ใช้ {name} = ชื่อผู้ใช้, \n = ขึ้นบรรทัดใหม่)</span></label>
           <textarea id="pm-response" style="min-height:130px" placeholder="สวัสดีครับ {name}! 😊&#10;มีอะไรให้ช่วยไหมครับ?"></textarea>
         </div>
+        <div class="field" style="grid-column:1/-1">
+          <label style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <span>🔘 ตัวเลือกย่อย <span style="color:var(--muted);font-weight:400">(ปุ่มที่แสดงใต้คำตอบ — กดแล้วส่งข้อความต่อ)</span></span>
+            <button type="button" class="btn btn-ghost btn-xs" onclick="addChoiceRow()">+ เพิ่มตัวเลือก</button>
+          </label>
+          <div id="pm-choices-list"></div>
+          <div id="pm-choices-empty" style="font-size:11px;color:var(--muted);padding:6px 0;display:none">
+            ยังไม่มีตัวเลือก — กด "+ เพิ่มตัวเลือก" เพื่อเพิ่มปุ่มให้ผู้ใช้เลือกต่อ
+          </div>
+        </div>
+
         <div class="field">
           <label>ห้อง (ว่าง = ทุกห้อง)</label>
           <select id="pm-room">
@@ -585,6 +665,58 @@ select option{background:var(--s2)}
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>
       <button class="btn btn-primary" onclick="savePattern()">💾 บันทึก Pattern</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: Menu Item Add/Edit ══════════════════════ -->
+<div class="modal-bg" id="menu-modal">
+  <div class="modal" style="width:420px">
+    <div class="modal-head">
+      <h3 id="menu-modal-title">+ เพิ่มเมนูใหม่</h3>
+      <button class="modal-close" onclick="closeMenuModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="mm-id" value="0">
+      <div class="form-row" style="margin-bottom:12px">
+        <div class="field">
+          <label>Icon (Emoji)</label>
+          <input type="text" id="mm-icon" placeholder="📋" maxlength="5" style="font-size:22px;text-align:center">
+        </div>
+        <div class="field">
+          <label>ลำดับแสดง (น้อย = ก่อน)</label>
+          <input type="number" id="mm-order" value="50" min="1" max="999">
+        </div>
+        <div class="field" style="grid-column:1/-1">
+          <label>Label (ชื่อปุ่ม — ไม่เกิน 10 ตัวอักษร)</label>
+          <input type="text" id="mm-label" placeholder="งานทะเบียนราษฎร์" maxlength="20">
+        </div>
+        <div class="field" style="grid-column:1/-1">
+          <label>ข้อความที่ส่งเมื่อกด</label>
+          <input type="text" id="mm-msg" placeholder="งานทะเบียนราษฎร์" maxlength="200">
+        </div>
+        <div class="field" style="grid-column:1/-1">
+          <label>🤖 Bot ตอบกลับ <span style="color:var(--muted);font-weight:400">(พิมพ์คำตอบ หรือเว้นว่างถ้าจะให้ AI ตอบ)</span></label>
+          <textarea id="mm-response" style="min-height:90px" placeholder="สวัสดีครับ! สำหรับงานทะเบียนราษฎร์ ท่านสามารถติดต่อ...&#10;(เว้นว่างและติ๊ก 'ให้ AI ตอบ' ด้านล่าง)"></textarea>
+        </div>
+        <div class="field" style="grid-column:1/-1">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="mm-useai" style="width:16px;height:16px;accent-color:var(--accentL)">
+            <span>🤖 ให้ AI (Claude/OpenAI) ตอบแทนเมื่อเลือกเมนูนี้</span>
+          </label>
+        </div>
+        <div class="field" style="grid-column:1/-1">
+          <label>สถานะ</label>
+          <select id="mm-active">
+            <option value="1">✅ เปิดใช้งาน</option>
+            <option value="0">❌ ปิดใช้งาน</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeMenuModal()">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="saveMenuItem()">💾 บันทึก</button>
     </div>
   </div>
 </div>
@@ -697,11 +829,12 @@ function switchTabById(tab) {
   switchTab(document.querySelector(`[data-tab="${tab}"]`));
 }
 function onTabSwitch(tab) {
-  if (tab === 'patterns') loadPatterns();
-  if (tab === 'log')      loadLog();
+  if (tab === 'patterns')  loadPatterns();
+  if (tab === 'log')       loadLog();
   if (tab === 'unanswered') loadUnanswered();
-  if (tab === 'config')   loadConfig();
-  if (tab === 'chat')     { loadInbox(); if (currentRoomId) startChatPoll(); }
+  if (tab === 'config')    loadConfig();
+  if (tab === 'menu')      loadMenuList();
+  if (tab === 'chat')      { loadInbox(); if (currentRoomId) startChatPoll(); }
 }
 
 // ══ Init ══════════════════════════════════════════════
@@ -827,8 +960,26 @@ function appendAdminMsg(m, prevSender) {
     const av   = `<div class="av" style="background:${color}">${init}</div>`;
     const name = isBot ? '🤖 RungsitBot' : isAdm ? `👮 ${m.display_name}` : m.display_name;
     const sRow = showSender ? `<div class="sender">${esc(name)}</div>` : '';
+
+    let bubContent;
+    if (m.msg_type === 'image') {
+      const src = esc(m.message);
+      bubContent = `<img src="${src}" alt="รูปภาพ" loading="lazy"
+        style="max-width:200px;border-radius:6px;display:block;cursor:zoom-in"
+        onclick="window.open('${src}','_blank')">`;
+    } else if (m.msg_type === 'location') {
+      try {
+        const loc = JSON.parse(m.message);
+        const mapUrl = `https://www.google.com/maps?q=${loc.lat},${loc.lng}&z=17`;
+        bubContent = `📍 <a href="${mapUrl}" target="_blank" style="color:var(--accentL)">ดูตำแหน่งบน Maps</a>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)} · ±${Math.round(loc.acc||0)}ม.</div>`;
+      } catch { bubContent = '📍 ตำแหน่ง'; }
+    } else {
+      bubContent = formatMsg(m.message);
+    }
+
     div.innerHTML = (isAdm ? '' : av) +
-      `<div><div class="bub">${formatMsg(m.message)}</div><div class="ts">${m.time_str||''}</div></div>` +
+      `<div><div class="bub">${bubContent}</div><div class="ts">${m.time_str||''}</div></div>` +
       (isAdm ? av : '');
     if (showSender) {
       const wrapper = document.createElement('div');
@@ -937,6 +1088,101 @@ function quickAddPattern(trigger) {
   setTimeout(() => { document.getElementById('pm-pattern').value = trigger; }, 100);
 }
 
+// ══ MENU ITEMS ════════════════════════════════════════
+async function loadMenuList() {
+  const r = await api('menu_list');
+  if (!r.ok) return;
+  renderMenuPreview(r.data.filter(m => m.is_active == 1));
+  const tbody = document.getElementById('menu-body');
+  if (!r.data.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">ยังไม่มีเมนู — กด + เพิ่มเมนูใหม่</td></tr>';
+    return;
+  }
+  tbody.innerHTML = r.data.map(m => {
+    const botCell = m.bot_response
+      ? `<span style="font-size:11px;color:var(--muted)">${esc(trunc(m.bot_response,45))}</span>`
+      : `<span style="font-size:10px;color:var(--red);opacity:.6">⚠️ ยังไม่มีคำตอบ</span>`;
+    return `
+    <tr class="${m.is_active ? '' : 'inactive'}">
+      <td>
+        <button class="btn btn-xs ${m.is_active ? 'btn-green' : 'btn-ghost'}" onclick="toggleMenuItem(${m.id},this)">
+          ${m.is_active ? '✅' : '⭕'}
+        </button>
+      </td>
+      <td style="font-size:22px;text-align:center">${esc(m.icon)}</td>
+      <td style="font-size:13px;font-weight:600">${esc(m.label)}</td>
+      <td style="font-size:12px;color:var(--accentL)">${esc(m.message_text)}</td>
+      <td>${botCell}</td>
+      <td style="font-size:12px;text-align:center">${m.sort_order}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-ghost btn-xs" onclick='editMenuItem(${JSON.stringify(m)})'>✏️</button>
+        <button class="btn btn-red btn-xs" onclick="deleteMenuItem(${m.id})">🗑️</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function renderMenuPreview(items) {
+  const el = document.getElementById('menu-preview');
+  if (!el) return;
+  if (!items.length) { el.innerHTML = '<div style="font-size:11px;color:#8fa3bc;grid-column:1/-1">ยังไม่มีเมนู</div>'; return; }
+  el.innerHTML = items.slice(0,9).map(m => `
+    <div style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px 6px;border-radius:8px;background:#1e2a3a;border:1px solid #253040;text-align:center">
+      <span style="font-size:20px;line-height:1">${esc(m.icon)}</span>
+      <span style="font-size:9px;color:#e8edf5;font-weight:500;line-height:1.3">${esc(m.label)}</span>
+    </div>`).join('');
+}
+
+function openMenuModal(data = null) {
+  document.getElementById('menu-modal-title').textContent = data ? '✏️ แก้ไขเมนู' : '+ เพิ่มเมนูใหม่';
+  document.getElementById('mm-id').value       = data?.id           || 0;
+  document.getElementById('mm-icon').value     = data?.icon         || '📋';
+  document.getElementById('mm-label').value    = data?.label        || '';
+  document.getElementById('mm-msg').value      = data?.message_text || '';
+  document.getElementById('mm-order').value    = data?.sort_order   ?? 50;
+  document.getElementById('mm-active').value   = data?.is_active    ?? 1;
+  document.getElementById('mm-response').value = data?.bot_response || '';
+  document.getElementById('mm-useai').checked  = false;
+  document.getElementById('menu-modal').classList.add('open');
+  document.getElementById('mm-label').focus();
+}
+function editMenuItem(m) { openMenuModal(m); }
+function closeMenuModal() { document.getElementById('menu-modal').classList.remove('open'); }
+
+async function saveMenuItem() {
+  const fd = {
+    id:           document.getElementById('mm-id').value,
+    icon:         document.getElementById('mm-icon').value.trim() || '📋',
+    label:        document.getElementById('mm-label').value.trim(),
+    message_text: document.getElementById('mm-msg').value.trim(),
+    sort_order:   document.getElementById('mm-order').value,
+    is_active:    document.getElementById('mm-active').value,
+    bot_response: document.getElementById('mm-response').value.trim(),
+    use_ai:       document.getElementById('mm-useai').checked ? 1 : 0,
+  };
+  if (!fd.label || !fd.message_text) { toast('กรุณากรอก Label และข้อความ', 'err'); return; }
+  const r = await api('menu_save', fd);
+  if (r.ok) { toast('บันทึกสำเร็จ ✅'); closeMenuModal(); loadMenuList(); }
+  else toast(r.error || 'บันทึกไม่ได้', 'err');
+}
+
+async function deleteMenuItem(id) {
+  if (!confirm('ลบเมนูนี้?')) return;
+  const r = await api('menu_delete', { id });
+  if (r.ok) { toast('ลบแล้ว'); loadMenuList(); }
+  else toast(r.error, 'err');
+}
+
+async function toggleMenuItem(id, btn) {
+  const r = await api('menu_toggle', { id });
+  if (r.ok) { btn.textContent = r.data.active ? '✅' : '⭕'; btn.className = `btn btn-xs ${r.data.active ? 'btn-green' : 'btn-ghost'}`; loadMenuList(); }
+  else toast(r.error, 'err');
+}
+
+document.getElementById('menu-modal')?.addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeMenuModal();
+});
+
 // ══ PATTERNS ══════════════════════════════════════════
 async function loadPatterns() {
   const q      = document.getElementById('pat-search')?.value || '';
@@ -978,6 +1224,34 @@ async function deletePattern(id) {
 }
 
 // ── Modal Pattern ─────────────────────────────────────
+let _modalChoices = [];
+
+function addChoiceRow(label = '', message = '') {
+  _modalChoices.push({ label, message });
+  renderChoicesList();
+}
+function removeChoiceRow(idx) {
+  _modalChoices.splice(idx, 1);
+  renderChoicesList();
+}
+function renderChoicesList() {
+  const el      = document.getElementById('pm-choices-list');
+  const emptyEl = document.getElementById('pm-choices-empty');
+  if (!el) return;
+  emptyEl.style.display = _modalChoices.length ? 'none' : 'block';
+  const iStyle = 'background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;font-size:12px;outline:none;font-family:inherit';
+  el.innerHTML = _modalChoices.map((c, i) => `
+    <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center">
+      <input value="${esc(c.label)}" placeholder="ชื่อปุ่ม เช่น 🛣️ ถนน"
+             oninput="_modalChoices[${i}].label=this.value"
+             style="flex:1;${iStyle}">
+      <input value="${esc(c.message)}" placeholder="ข้อความที่ส่งเมื่อกด"
+             oninput="_modalChoices[${i}].message=this.value"
+             style="flex:1.5;${iStyle}">
+      <button class="btn btn-red btn-xs" onclick="removeChoiceRow(${i})" style="flex-shrink:0">🗑️</button>
+    </div>`).join('');
+}
+
 function openPatternModal(data = null) {
   document.getElementById('modal-title').textContent = data ? '✏️ แก้ไข Pattern' : '+ เพิ่ม Pattern ใหม่';
   document.getElementById('pm-id').value       = data?.id || 0;
@@ -988,6 +1262,9 @@ function openPatternModal(data = null) {
   document.getElementById('pm-room').value     = data?.room_id || '';
   document.getElementById('pm-active').value   = data?.is_active ?? 1;
   document.getElementById('pm-useai').checked  = !!(data?.use_ai);
+  _modalChoices = [];
+  try { _modalChoices = JSON.parse(data?.choices || '[]') || []; } catch { _modalChoices = []; }
+  renderChoicesList();
   document.getElementById('pat-modal').classList.add('open');
   document.getElementById('pm-pattern').focus();
 }
@@ -995,6 +1272,7 @@ function editPattern(p) { openPatternModal(p); }
 function closeModal()   { document.getElementById('pat-modal').classList.remove('open'); }
 
 async function savePattern() {
+  const validChoices = _modalChoices.filter(c => c.label?.trim() && c.message?.trim());
   const fd = {
     id:         document.getElementById('pm-id').value,
     pattern:    document.getElementById('pm-pattern').value.trim(),
@@ -1004,6 +1282,7 @@ async function savePattern() {
     room_id:    document.getElementById('pm-room').value,
     is_active:  document.getElementById('pm-active').value,
     use_ai:     document.getElementById('pm-useai').checked ? 1 : 0,
+    choices:    JSON.stringify(validChoices),
   };
   if (!fd.pattern) { toast('กรุณาระบุ Pattern', 'err'); return; }
   const r = await api('pattern_save', fd);
@@ -1037,6 +1316,9 @@ async function loadConfig() {
   document.getElementById('cf-claude-model').value  = c.claude_model || 'claude-sonnet-4-20250514';
   document.getElementById('cf-openai-key').value    = c.openai_api_key || '';
   document.getElementById('cf-prompt').value        = c.ai_system_prompt || '';
+  document.getElementById('cf-image-reply').value   = c.image_reply || '';
+  document.getElementById('cf-image-ai').checked    = c.image_use_ai === '1';
+  document.getElementById('cf-location-reply').value = c.location_reply || '';
   document.getElementById('cf-admin-name').value    = document.getElementById('sb-name').textContent;
 }
 
@@ -1053,6 +1335,9 @@ async function saveConfig() {
     claude_model:    document.getElementById('cf-claude-model').value,
     openai_api_key:  document.getElementById('cf-openai-key').value,
     ai_system_prompt:document.getElementById('cf-prompt').value,
+    image_reply:     document.getElementById('cf-image-reply').value,
+    image_use_ai:    document.getElementById('cf-image-ai').checked ? '1' : '0',
+    location_reply:  document.getElementById('cf-location-reply').value,
     admin_name:      document.getElementById('cf-admin-name').value,
   };
   if (pass) fd.admin_password = pass;
