@@ -1,0 +1,31 @@
+# Security Headers
+Header always set X-Frame-Options "SAMEORIGIN"
+Header always set X-Content-Type-Options "nosniff"
+Header always set X-XSS-Protection "1; mode=block"
+Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+# Protect sensitive files
+<FilesMatch "\.(sql|md|log)$">
+    Require all denied
+</FilesMatch>
+
+<Files "chat_config.php">
+    Require all denied
+</Files>
+
+<Files "notification_engine.php">
+    Require all denied
+</Files>
+
+<Files "chat_bot_engine.php">
+    Require all denied
+</Files>
+
+<Files "cron_notify.php">
+    Require all denied
+</Files>
+
+# Allow only GET/POST
+<LimitExcept GET POST>
+    Require all denied
+</LimitExcept>

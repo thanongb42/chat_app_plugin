@@ -1,0 +1,17 @@
+# Credentials — ห้าม commit ข้อมูลสำคัญ
+chat_config.php
+**/chat_config.php
+
+# Claude Code internal files
+.claude/
+
+# Sensitive documents
+*.pdf
+
+# XAMPP / System
+.sixth/
+Thumbs.db
+.DS_Store
+
+# Log files
+*.log
