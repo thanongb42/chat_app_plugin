@@ -39,6 +39,15 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',Tahoma,sans-serif;b
 #hdr .info .name{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #hdr .info .sub{font-size:10px;color:rgba(255,255,255,.75);margin-top:1px}
 #hdr .online-dot{width:9px;height:9px;border-radius:50%;background:#4caf50;border:2px solid #fff;flex-shrink:0}
+#new-chat-btn{
+  width:30px;height:30px;border-radius:8px;border:1px solid rgba(255,255,255,.25);
+  background:rgba(255,255,255,.12);color:#fff;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-size:15px;flex-shrink:0;transition:.2s;padding:0;
+}
+#new-chat-btn:hover{background:rgba(255,255,255,.25);border-color:rgba(255,255,255,.5)}
+#new-chat-btn:active{transform:scale(.93)}
+#new-chat-btn title{display:none}
 
 /* ─── Room tabs ─── */
 #rooms{
@@ -318,6 +327,11 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',Tahoma,sans-serif;b
       <div class="name">RungsitBot — เทศบาลนครรังสิต</div>
       <div class="sub">ตอบคำถามอัตโนมัติ · โทร 0 2567 6000</div>
     </div>
+    <button id="new-chat-btn" onclick="newChat()" title="เริ่มสนทนาใหม่">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2">
+        <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+      </svg>
+    </button>
     <div class="online-dot" title="ออนไลน์"></div>
   </div>
 
@@ -415,6 +429,18 @@ async function doLogin() {
     document.getElementById('loginOverlay').style.display = 'none';
     startChat();
   }
+}
+
+// ─── New Chat ─────────────────────────────────────
+function newChat() {
+  if (menuOpen) toggleMenu();
+  clearImgPreview();
+  document.getElementById('msgArea').innerHTML = '';
+  document.getElementById('msgInput').value    = '';
+  lastId = 0;
+  showWelcome();
+  clearInterval(pollTimer);
+  pollTimer = setInterval(pollMessages, <?= CHAT_POLL_INTERVAL ?>);
 }
 
 // ─── Welcome panel show/hide ──────────────────────
