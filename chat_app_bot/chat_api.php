@@ -40,12 +40,13 @@ try {
             $username = 'user_' . uniqid();
             $color    = randomAvatarColor();
 
+            $deviceId = preg_replace('/[^a-zA-Z0-9\-_]/', '', $_POST['device_id'] ?? '');
             $pdo = getChatDB();
             $stmt = $pdo->prepare("
-                INSERT INTO chat_users (username, display_name, avatar_color, is_online, last_seen)
-                VALUES (?, ?, ?, 1, NOW())
+                INSERT INTO chat_users (username, display_name, avatar_color, device_id, is_online, last_seen)
+                VALUES (?, ?, ?, ?, 1, NOW())
             ");
-            $stmt->execute([$username, $displayName, $color]);
+            $stmt->execute([$username, $displayName, $color, $deviceId ?: null]);
             $userId = $pdo->lastInsertId();
 
             $_SESSION[CHAT_SESSION_NAME] = [
@@ -376,6 +377,91 @@ try {
             } catch (Throwable $e) { error_log('Bot location error: ' . $e->getMessage()); }
 
             jsonResponse(['success' => true]);
+
+        // ─────────────────────────────────────
+        // DEVICE AUTO-LOGIN (คืนชื่อผู้ใช้เดิม)
+        // ─────────────────────────────────────
+        case 'device_login':
+            $deviceId = preg_replace('/[^a-zA-Z0-9\-_]/', '', $_POST['device_id'] ?? '');
+            if (!$deviceId) jsonResponse(['success' => false, 'reason' => 'no_device']);
+
+            $pdo   = getChatDB();
+            $stmt  = $pdo->prepare("SELECT display_name, avatar_color FROM chat_users WHERE device_id=? ORDER BY last_seen DESC LIMIT 1");
+            $stmt->execute([$deviceId]);
+            $prev  = $stmt->fetch();
+            if (!$prev) jsonResponse(['success' => false, 'reason' => 'new_device']);
+
+            // สร้าง session ใหม่ด้วยชื่อเดิม
+            $username = 'user_' . uniqid();
+            $convId   = bin2hex(random_bytes(16));
+            $pdo->prepare("INSERT INTO chat_users (username, display_name, avatar_color, device_id, is_online, last_seen) VALUES (?,?,?,?,1,NOW())")
+                ->execute([$username, $prev['display_name'], $prev['avatar_color'], $deviceId]);
+            $userId = (int)$pdo->lastInsertId();
+
+            $_SESSION[CHAT_SESSION_NAME] = [
+                'id' => $userId, 'username' => $username,
+                'display_name' => $prev['display_name'], 'avatar_color' => $prev['avatar_color'],
+            ];
+            $_SESSION['conversation_id'] = $convId;
+
+            jsonResponse(['success' => true, 'user' => $_SESSION[CHAT_SESSION_NAME], 'conversation_id' => $convId]);
+
+        // ─────────────────────────────────────
+        // DEVICE HISTORY (รายการสนทนาเก่า)
+        // ─────────────────────────────────────
+        case 'device_history':
+            $deviceId = preg_replace('/[^a-zA-Z0-9\-_]/', '', $_GET['device_id'] ?? '');
+            if (!$deviceId) jsonResponse(['success' => true, 'conversations' => []]);
+
+            $pdo  = getChatDB();
+            $stmt = $pdo->prepare("
+                SELECT
+                    m.conversation_id,
+                    m.room_id,
+                    r.name AS room_name,
+                    DATE_FORMAT(MIN(m.created_at),'%d/%m/%Y %H:%i') AS started_at,
+                    DATE_FORMAT(MAX(m.created_at),'%d/%m/%Y %H:%i') AS last_at,
+                    COUNT(*)                                          AS msg_count,
+                    (SELECT m2.message FROM chat_messages m2
+                     WHERE m2.conversation_id = m.conversation_id
+                       AND m2.username NOT IN ('chatbot','system','admin_staff')
+                     ORDER BY m2.id ASC LIMIT 1)                     AS first_msg
+                FROM chat_messages m
+                INNER JOIN chat_users u  ON u.username = m.username AND u.device_id = ?
+                INNER JOIN chat_rooms r  ON r.id = m.room_id
+                WHERE m.conversation_id IS NOT NULL
+                GROUP BY m.conversation_id, m.room_id
+                ORDER BY MAX(m.created_at) DESC
+                LIMIT 30
+            ");
+            $stmt->execute([$deviceId]);
+            jsonResponse(['success' => true, 'conversations' => $stmt->fetchAll()]);
+
+        // ─────────────────────────────────────
+        // CONVERSATION VIEW (ดูการสนทนาเก่า)
+        // ─────────────────────────────────────
+        case 'conversation_view':
+            $convId   = preg_replace('/[^a-f0-9]/',         '', $_GET['conversation_id'] ?? '');
+            $deviceId = preg_replace('/[^a-zA-Z0-9\-_]/', '', $_GET['device_id']        ?? '');
+            if (!$convId || !$deviceId) jsonResponse(['success' => false, 'error' => 'ข้อมูลไม่ครบ']);
+
+            $pdo = getChatDB();
+            // ตรวจว่า device นี้เป็นเจ้าของ conversation จริง
+            $chk = $pdo->prepare("
+                SELECT COUNT(*) FROM chat_messages m
+                INNER JOIN chat_users u ON u.username = m.username
+                WHERE m.conversation_id = ? AND u.device_id = ?
+            ");
+            $chk->execute([$convId, $deviceId]);
+            if ((int)$chk->fetchColumn() === 0) jsonResponse(['success' => false, 'error' => 'ไม่พบประวัติ'], 403);
+
+            $stmt = $pdo->prepare("
+                SELECT id, username, display_name, avatar_color, message, msg_type, metadata,
+                       DATE_FORMAT(created_at,'%H:%i') AS time_str
+                FROM chat_messages WHERE conversation_id = ? ORDER BY created_at ASC
+            ");
+            $stmt->execute([$convId]);
+            jsonResponse(['success' => true, 'messages' => $stmt->fetchAll()]);
 
         // ─────────────────────────────────────
         // MENU ITEMS (quick reply menu)

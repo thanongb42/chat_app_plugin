@@ -199,6 +199,52 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',Tahoma,sans-serif;b
 .loc-coords{font-size:10px;color:var(--text2);line-height:1.7}
 .loc-link{font-size:11px;color:var(--accentL);margin-top:5px;display:block}
 
+/* ─── History panel ─── */
+#hist-panel,#hist-conv-panel{
+  position:absolute;inset:0;z-index:190;
+  background:var(--bg);display:none;flex-direction:column;
+}
+#hist-panel.open,#hist-conv-panel.open{display:flex}
+.hist-hdr{
+  display:flex;align-items:center;gap:10px;padding:10px 12px;
+  background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;
+}
+.hist-hdr-title{flex:1;font-size:13px;font-weight:700;color:var(--accentL)}
+.hist-back{width:28px;height:28px;border-radius:50%;border:1px solid var(--border);
+  background:none;color:var(--text2);cursor:pointer;font-size:16px;
+  display:flex;align-items:center;justify-content:center}
+.hist-back:hover{border-color:var(--accentL);color:var(--accentL)}
+#hist-list{flex:1;overflow-y:auto;padding:8px 0}
+#hist-list::-webkit-scrollbar{width:3px}
+#hist-list::-webkit-scrollbar-thumb{background:var(--border)}
+.hist-item{
+  display:flex;align-items:center;gap:10px;
+  padding:12px 14px;border-bottom:1px solid var(--border);
+  cursor:pointer;transition:.15s;
+}
+.hist-item:hover{background:var(--surface2)}
+.hist-item:active{background:rgba(66,165,245,.08)}
+.hist-item-body{flex:1;min-width:0}
+.hist-date{font-size:10px;color:var(--text2);margin-bottom:3px}
+.hist-preview{font-size:12px;color:var(--text);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.hist-meta{font-size:10px;color:var(--text2);margin-top:2px}
+.hist-arrow{color:var(--text2);font-size:14px;flex-shrink:0}
+.hist-empty{text-align:center;padding:40px 20px;color:var(--text2);font-size:13px;line-height:1.8}
+#hist-footer{padding:12px 14px;border-top:1px solid var(--border);flex-shrink:0}
+.hist-del-btn{
+  width:100%;padding:9px;border-radius:8px;border:1px solid var(--red);
+  background:none;color:var(--red);font-size:12px;cursor:pointer;
+  font-family:inherit;transition:.15s;
+}
+.hist-del-btn:hover{background:var(--red);color:#fff}
+#hist-conv-msgs{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:6px}
+#hist-conv-msgs::-webkit-scrollbar{width:4px}
+#hist-conv-msgs::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.hist-readonly-bar{
+  padding:6px 12px;background:rgba(210,153,34,.08);border-top:1px solid rgba(210,153,34,.2);
+  font-size:10px;color:var(--orange);text-align:center;flex-shrink:0;
+}
+
 /* ─── Map picker modal ─── */
 #map-modal{
   position:absolute;inset:0;z-index:200;
@@ -327,6 +373,11 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',Tahoma,sans-serif;b
       <div class="name">RungsitBot — เทศบาลนครรังสิต</div>
       <div class="sub">ตอบคำถามอัตโนมัติ · โทร 0 2567 6000</div>
     </div>
+    <button id="hist-btn" onclick="openHistory()" title="ประวัติการสนทนา" style="width:30px;height:30px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.12);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;transition:.2s;padding:0">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+      </svg>
+    </button>
     <button id="new-chat-btn" onclick="newChat()" title="เริ่มสนทนาใหม่">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2">
         <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
@@ -364,6 +415,28 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',Tahoma,sans-serif;b
       <div class="menu-title">⚡ เลือกหัวข้อที่ต้องการถาม</div>
       <div class="menu-grid" id="menuGrid"></div>
     </div>
+  </div>
+
+  <!-- History list panel -->
+  <div id="hist-panel">
+    <div class="hist-hdr">
+      <button class="hist-back" onclick="closeHistory()">←</button>
+      <div class="hist-hdr-title">📜 ประวัติการสนทนา</div>
+    </div>
+    <div id="hist-list"></div>
+    <div id="hist-footer">
+      <button class="hist-del-btn" onclick="clearDeviceHistory()">🗑️ ลบประวัติออกจากเครื่องนี้</button>
+    </div>
+  </div>
+
+  <!-- Single conversation view panel -->
+  <div id="hist-conv-panel">
+    <div class="hist-hdr">
+      <button class="hist-back" onclick="closeConvView()">←</button>
+      <div class="hist-hdr-title" id="hist-conv-title">กำลังโหลด...</div>
+    </div>
+    <div id="hist-conv-msgs"></div>
+    <div class="hist-readonly-bar">📖 โหมดอ่านอย่างเดียว — ข้อความในอดีต</div>
   </div>
 
   <!-- Map picker modal (full overlay) -->
@@ -423,7 +496,7 @@ document.getElementById('nameInput').addEventListener('keydown', e => { if(e.key
 async function doLogin() {
   const name = document.getElementById('nameInput').value.trim();
   if (!name) { document.getElementById('nameInput').focus(); return; }
-  const r = await api('login', { display_name: name });
+  const r = await api('login', { display_name: name, device_id: deviceId });
   if (r.success) {
     currentUser    = r.user;
     conversationId = r.conversation_id || '';
@@ -465,16 +538,6 @@ async function startChat() {
   await loadMenuItems();
   switchRoom(currentRoom);
   heartTimer = setInterval(() => api('heartbeat', {}), 20000);
-}
-
-async function checkSession() {
-  const r = await api('check_session');
-  if (r.logged_in && !currentUser) {
-    currentUser    = r.user;
-    conversationId = r.conversation_id || '';
-    document.getElementById('loginOverlay').style.display = 'none';
-    startChat();
-  }
 }
 
 async function loadWelcomeMsg() {
@@ -839,8 +902,131 @@ async function sendMenuMsg(text) {
 document.getElementById('menuBtn').addEventListener('click', toggleMenu);
 document.getElementById('msgArea').addEventListener('click', () => { if (menuOpen) toggleMenu(); });
 
-// ─── Check session on load ───────────────────────
-window.addEventListener('DOMContentLoaded', checkSession);
+// ─── Device ID management ─────────────────────────
+let deviceId = '';
+
+function getOrCreateDeviceId() {
+  let id = localStorage.getItem('rungsit_device_id');
+  if (!id) {
+    id = (crypto.randomUUID?.() || (Date.now().toString(36) + Math.random().toString(36).slice(2))).replace(/-/g,'');
+    localStorage.setItem('rungsit_device_id', id);
+    document.cookie = `rungsit_device=${id}; max-age=${365*24*3600}; path=/; SameSite=Lax`;
+  }
+  return id;
+}
+
+// ─── Init on page load ────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  deviceId = getOrCreateDeviceId();
+
+  // 1. Check existing PHP session (page refresh)
+  const sess = await api('check_session');
+  if (sess.logged_in) {
+    currentUser    = sess.user;
+    conversationId = sess.conversation_id || '';
+    document.getElementById('loginOverlay').style.display = 'none';
+    startChat();
+    return;
+  }
+
+  // 2. Device auto-login (returning user, same device)
+  const dev = await api('device_login', { device_id: deviceId });
+  if (dev.success) {
+    currentUser    = dev.user;
+    conversationId = dev.conversation_id || '';
+    document.getElementById('loginOverlay').style.display = 'none';
+    startChat();
+    return;
+  }
+
+  // 3. New user → show login overlay
+  document.getElementById('nameInput').focus();
+});
+
+// ─── History panel ────────────────────────────────
+async function openHistory() {
+  if (!deviceId) return;
+  document.getElementById('hist-panel').classList.add('open');
+  document.getElementById('hist-list').innerHTML =
+    '<div class="hist-empty">⏳ กำลังโหลดประวัติ...</div>';
+
+  const r = await api('device_history', null, { device_id: deviceId });
+  const list = document.getElementById('hist-list');
+
+  if (!r.success || !r.conversations?.length) {
+    list.innerHTML = '<div class="hist-empty">📭 ยังไม่มีประวัติการสนทนา<br><span style="font-size:11px">เริ่มสนทนาเพื่อบันทึกประวัติ</span></div>';
+    return;
+  }
+
+  list.innerHTML = r.conversations.map(c => `
+    <div class="hist-item" onclick="viewConversation('${esc(c.conversation_id)}','${esc(c.started_at)}')">
+      <div class="hist-item-body">
+        <div class="hist-date">📅 ${esc(c.started_at)}</div>
+        <div class="hist-preview">${esc(trunc(c.first_msg || '(ไม่มีข้อความ)', 50))}</div>
+        <div class="hist-meta">💬 ${esc(c.room_name)} · ${c.msg_count} ข้อความ · ล่าสุด ${esc(c.last_at)}</div>
+      </div>
+      <span class="hist-arrow">›</span>
+    </div>`).join('');
+}
+
+function closeHistory() {
+  document.getElementById('hist-panel').classList.remove('open');
+}
+
+function trunc(s, n) { s = String(s||''); return s.length > n ? s.slice(0,n)+'…' : s; }
+
+async function viewConversation(convId, dateLabel) {
+  document.getElementById('hist-conv-panel').classList.add('open');
+  document.getElementById('hist-conv-title').textContent = dateLabel;
+  const msgEl = document.getElementById('hist-conv-msgs');
+  msgEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text2);font-size:12px">⏳ กำลังโหลด...</div>';
+
+  const r = await api('conversation_view', null, { conversation_id: convId, device_id: deviceId });
+  if (!r.success) { msgEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--red);font-size:12px">ไม่พบข้อมูล</div>'; return; }
+
+  msgEl.innerHTML = '';
+  let prevSender = null;
+  r.messages.forEach(m => {
+    const isOwn = !['chatbot','system','admin_staff'].includes(m.username) &&
+                  m.username !== 'chatbot';
+    const isBot = m.username === 'chatbot';
+    const isSys = m.msg_type === 'system';
+
+    const div = document.createElement('div');
+    div.className = 'msg ' + (isSys ? 'sys' : isBot ? 'bot' : isOwn ? 'own' : 'other');
+
+    let bubbleContent = m.msg_type === 'image'
+      ? `<img src="${esc(m.message)}" alt="รูป" style="max-width:200px;border-radius:8px;display:block">`
+      : m.msg_type === 'location'
+        ? (() => { try { const loc=JSON.parse(m.message); return `📍 <a href="https://www.google.com/maps?q=${loc.lat},${loc.lng}" target="_blank" style="color:var(--accentL)">ดูตำแหน่ง</a>`; } catch{return '📍 ตำแหน่ง';} })()
+        : formatMsg(m.message);
+
+    if (isSys) {
+      div.innerHTML = `<div class="bubble">${bubbleContent}</div>`;
+    } else {
+      const av  = `<div class="avatar" style="background:${m.avatar_color}">${(m.display_name||'?')[0]}</div>`;
+      const snm = m.username !== prevSender && !isOwn ? `<div class="sender-name">${esc(isBot?'🤖 RungsitBot':m.display_name)}</div>` : '';
+      div.innerHTML = (isOwn?'':av) + `<div>${snm}<div class="bubble">${bubbleContent}</div><div class="msg-meta">${m.time_str||''}</div></div>` + (isOwn?av:'');
+    }
+    msgEl.appendChild(div);
+    prevSender = m.username;
+  });
+  msgEl.scrollTop = msgEl.scrollHeight;
+}
+
+function closeConvView() {
+  document.getElementById('hist-conv-panel').classList.remove('open');
+}
+
+function clearDeviceHistory() {
+  if (!confirm('ลบประวัติการสนทนาออกจากเครื่องนี้?\n(ข้อมูลยังอยู่ที่ server เจ้าหน้าที่ยังเห็นได้)')) return;
+  localStorage.removeItem('rungsit_device_id');
+  document.cookie = 'rungsit_device=; max-age=0; path=/';
+  deviceId = '';
+  closeHistory();
+  alert('ลบประวัติแล้ว\nหากเปิด chat ใหม่จะเริ่มต้นเป็นผู้ใช้ใหม่');
+  location.reload();
+}
 </script>
 </body>
 </html>
