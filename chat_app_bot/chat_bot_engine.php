@@ -321,14 +321,14 @@ class ChatBotEngine {
     // ══════════════════════════════════════════
     public static function insertBotMessage(
         PDO $db, int $roomId, string $botName, string $botColor, string $response,
-        int $delayMs = 0, ?string $metadata = null
+        int $delayMs = 0, ?string $metadata = null, ?string $conversationId = null
     ): void {
         if ($delayMs > 0) usleep($delayMs * 1000);
         $db->prepare("
             INSERT INTO chat_messages
-              (room_id, username, display_name, avatar_color, message, msg_type, metadata)
-            VALUES (?, 'chatbot', ?, ?, ?, 'text', ?)
-        ")->execute([$roomId, $botName, $botColor, $response, $metadata]);
+              (room_id, conversation_id, username, display_name, avatar_color, message, msg_type, metadata)
+            VALUES (?, ?, 'chatbot', ?, ?, ?, 'text', ?)
+        ")->execute([$roomId, $conversationId, $botName, $botColor, $response, $metadata]);
     }
 
     // ══════════════════════════════════════════

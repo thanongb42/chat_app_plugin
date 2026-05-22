@@ -414,7 +414,7 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',Tahoma,sans-serif;b
 <script>
 const API = 'chat_api.php';
 let currentRoom = 1, lastId = 0, pollTimer, heartTimer, currentUser = null;
-let atBottom = true;
+let conversationId = '', atBottom = true;
 
 // ─── Login ───────────────────────────────────────
 document.getElementById('loginBtn').addEventListener('click', doLogin);
@@ -425,16 +425,22 @@ async function doLogin() {
   if (!name) { document.getElementById('nameInput').focus(); return; }
   const r = await api('login', { display_name: name });
   if (r.success) {
-    currentUser = r.user;
+    currentUser    = r.user;
+    conversationId = r.conversation_id || '';
     document.getElementById('loginOverlay').style.display = 'none';
     startChat();
   }
 }
 
 // ─── New Chat ─────────────────────────────────────
-function newChat() {
+async function newChat() {
   if (menuOpen) toggleMenu();
   clearImgPreview();
+
+  // สร้าง conversation_id ใหม่ฝั่ง server (session update)
+  const r = await api('new_conversation');
+  if (r.success) conversationId = r.conversation_id;
+
   document.getElementById('msgArea').innerHTML = '';
   document.getElementById('msgInput').value    = '';
   lastId = 0;
@@ -464,7 +470,8 @@ async function startChat() {
 async function checkSession() {
   const r = await api('check_session');
   if (r.logged_in && !currentUser) {
-    currentUser = r.user;
+    currentUser    = r.user;
+    conversationId = r.conversation_id || '';
     document.getElementById('loginOverlay').style.display = 'none';
     startChat();
   }
@@ -492,7 +499,7 @@ function switchRoom(id) {
 
 // ─── Polling ──────────────────────────────────────
 async function pollMessages() {
-  const r = await api('messages', null, { room_id: currentRoom, last_id: lastId, limit: 40 });
+  const r = await api('messages', null, { room_id: currentRoom, last_id: lastId, conversation_id: conversationId, limit: 40 });
   if (!r.messages?.length) return;
   hideWelcome();
   const area = document.getElementById('msgArea');

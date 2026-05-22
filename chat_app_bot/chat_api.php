@@ -62,7 +62,14 @@ try {
             ");
             $stmt2->execute(["$displayName เข้าร่วมห้องสนทนา 👋"]);
 
-            jsonResponse(['success' => true, 'user' => $_SESSION[CHAT_SESSION_NAME]]);
+            // สร้าง conversation_id สำหรับ session นี้
+            $_SESSION['conversation_id'] = bin2hex(random_bytes(16));
+
+            jsonResponse([
+                'success'         => true,
+                'user'            => $_SESSION[CHAT_SESSION_NAME],
+                'conversation_id' => $_SESSION['conversation_id'],
+            ]);
 
         // ─────────────────────────────────────
         // LOGOUT
@@ -87,9 +94,26 @@ try {
         // ─────────────────────────────────────
         case 'check_session':
             if (!empty($_SESSION[CHAT_SESSION_NAME])) {
-                jsonResponse(['logged_in' => true, 'user' => $_SESSION[CHAT_SESSION_NAME]]);
+                if (empty($_SESSION['conversation_id'])) {
+                    $_SESSION['conversation_id'] = bin2hex(random_bytes(16));
+                }
+                jsonResponse([
+                    'logged_in'       => true,
+                    'user'            => $_SESSION[CHAT_SESSION_NAME],
+                    'conversation_id' => $_SESSION['conversation_id'],
+                ]);
             }
             jsonResponse(['logged_in' => false]);
+
+        // ─────────────────────────────────────
+        // NEW CONVERSATION
+        // ─────────────────────────────────────
+        case 'new_conversation':
+            if (empty($_SESSION[CHAT_SESSION_NAME])) {
+                jsonResponse(['success' => false, 'error' => 'กรุณาเข้าสู่ระบบ'], 401);
+            }
+            $_SESSION['conversation_id'] = bin2hex(random_bytes(16));
+            jsonResponse(['success' => true, 'conversation_id' => $_SESSION['conversation_id']]);
 
         // ─────────────────────────────────────
         // GET MESSAGES
@@ -97,36 +121,34 @@ try {
         case 'messages':
             $roomId = (int)($_GET['room_id'] ?? 1);
             $lastId = (int)($_GET['last_id'] ?? 0);
-            $limit  = (int)($_GET['limit']   ?? CHAT_MSG_LIMIT);
-            $limit  = min($limit, 100);
+            $limit  = min((int)($_GET['limit'] ?? CHAT_MSG_LIMIT), 100);
+            // กรอง conversation_id เฉพาะตัวอักษร hex (ป้องกัน injection)
+            $convId = preg_replace('/[^a-f0-9]/', '', $_GET['conversation_id'] ?? '');
 
             $pdo = getChatDB();
+            $convCond = $convId ? ' AND conversation_id = ?' : '';
 
             if ($lastId === 0) {
-                // โหลดข้อความล่าสุด
+                $params = $convId ? [$roomId, $convId, $limit] : [$roomId, $limit];
                 $stmt = $pdo->prepare("
                     SELECT id, username, display_name, avatar_color, message, msg_type, metadata,
-                           DATE_FORMAT(created_at, '%H:%i') AS time_str,
-                           created_at
+                           DATE_FORMAT(created_at, '%H:%i') AS time_str, created_at
                     FROM chat_messages
-                    WHERE room_id = ?
-                    ORDER BY created_at DESC
-                    LIMIT ?
+                    WHERE room_id = ? {$convCond}
+                    ORDER BY created_at DESC LIMIT ?
                 ");
-                $stmt->execute([$roomId, $limit]);
+                $stmt->execute($params);
                 $msgs = array_reverse($stmt->fetchAll());
             } else {
-                // Polling — ดึงข้อความใหม่หลัง last_id
+                $params = $convId ? [$roomId, $lastId, $convId] : [$roomId, $lastId];
                 $stmt = $pdo->prepare("
                     SELECT id, username, display_name, avatar_color, message, msg_type, metadata,
-                           DATE_FORMAT(created_at, '%H:%i') AS time_str,
-                           created_at
+                           DATE_FORMAT(created_at, '%H:%i') AS time_str, created_at
                     FROM chat_messages
-                    WHERE room_id = ? AND id > ?
-                    ORDER BY created_at ASC
-                    LIMIT 50
+                    WHERE room_id = ? AND id > ? {$convCond}
+                    ORDER BY created_at ASC LIMIT 50
                 ");
-                $stmt->execute([$roomId, $lastId]);
+                $stmt->execute($params);
                 $msgs = $stmt->fetchAll();
             }
 
@@ -151,13 +173,14 @@ try {
                 jsonResponse(['success' => false, 'error' => 'ข้อความยาวเกินไป']);
             }
 
-            $pdo = getChatDB();
+            $pdo   = getChatDB();
+            $convId = $_SESSION['conversation_id'] ?? bin2hex(random_bytes(16));
             $stmt = $pdo->prepare("
-                INSERT INTO chat_messages (room_id, user_id, username, display_name, avatar_color, message)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO chat_messages (room_id, conversation_id, user_id, username, display_name, avatar_color, message)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             ");
             $stmt->execute([
-                $roomId,
+                $roomId, $convId,
                 $user['id'],
                 $user['username'],
                 $user['display_name'],
@@ -194,7 +217,8 @@ try {
                         $bot->getBotColor(),
                         $result['response'],
                         $bot->getDelayMs(),
-                        $metadata
+                        $metadata,
+                        $convId
                     );
                     // Bot fallback → แจ้งเตือน
                     if ($result['type'] === 'fallback') {
@@ -290,11 +314,12 @@ try {
             }
 
             $imgPath = 'uploads/chat/' . $filename;
-            $pdo = getChatDB();
+            $pdo    = getChatDB();
+            $convId = $_SESSION['conversation_id'] ?? bin2hex(random_bytes(16));
             $pdo->prepare("
-                INSERT INTO chat_messages (room_id, user_id, username, display_name, avatar_color, message, msg_type)
-                VALUES (?,?,?,?,?,?,'image')
-            ")->execute([$roomId, $user['id'], $user['username'], $user['display_name'], $user['avatar_color'], $imgPath]);
+                INSERT INTO chat_messages (room_id, conversation_id, user_id, username, display_name, avatar_color, message, msg_type)
+                VALUES (?,?,?,?,?,?,?,'image')
+            ")->execute([$roomId, $convId, $user['id'], $user['username'], $user['display_name'], $user['avatar_color'], $imgPath]);
 
             // Bot ตอบขอบคุณรูปภาพ (+ Claude Vision ถ้าเปิด AI)
             try {
@@ -304,7 +329,7 @@ try {
                 if ($result) {
                     ChatBotEngine::insertBotMessage(
                         $pdo, $roomId, $bot->getBotName(), $bot->getBotColor(),
-                        $result['response'], $bot->getDelayMs()
+                        $result['response'], $bot->getDelayMs(), null, $convId
                     );
                 }
             } catch (Throwable $e) { error_log('Bot image error: ' . $e->getMessage()); }
@@ -330,11 +355,12 @@ try {
 
             $locArr  = ['lat' => round($lat, 7), 'lng' => round($lng, 7), 'acc' => round($acc, 1)];
             $locData = json_encode($locArr, JSON_UNESCAPED_UNICODE);
-            $pdo = getChatDB();
+            $pdo    = getChatDB();
+            $convId = $_SESSION['conversation_id'] ?? bin2hex(random_bytes(16));
             $pdo->prepare("
-                INSERT INTO chat_messages (room_id, user_id, username, display_name, avatar_color, message, msg_type)
-                VALUES (?,?,?,?,?,?,'location')
-            ")->execute([$roomId, $user['id'], $user['username'], $user['display_name'], $user['avatar_color'], $locData]);
+                INSERT INTO chat_messages (room_id, conversation_id, user_id, username, display_name, avatar_color, message, msg_type)
+                VALUES (?,?,?,?,?,?,?,'location')
+            ")->execute([$roomId, $convId, $user['id'], $user['username'], $user['display_name'], $user['avatar_color'], $locData]);
 
             // Bot ตอบรับตำแหน่งพร้อมชื่อสถานที่จริง
             try {
@@ -344,7 +370,7 @@ try {
                 if ($result) {
                     ChatBotEngine::insertBotMessage(
                         $pdo, $roomId, $bot->getBotName(), $bot->getBotColor(),
-                        $result['response'], $bot->getDelayMs()
+                        $result['response'], $bot->getDelayMs(), null, $convId
                     );
                 }
             } catch (Throwable $e) { error_log('Bot location error: ' . $e->getMessage()); }
