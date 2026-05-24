@@ -24,7 +24,7 @@ class ChatBotEngine {
     // ══════════════════════════════════════════
     // PUBLIC: ประมวลผลข้อความ → return bot reply
     // ══════════════════════════════════════════
-    public function process(string $message, string $userName, int $roomId): ?array {
+    public function process(string $message, string $userName, int $roomId, string $convId = ''): ?array {
         if (!$this->isEnabled()) return null;
 
         // ข้ามข้อความจาก bot เอง
@@ -42,18 +42,18 @@ class ChatBotEngine {
                 // Pattern บอกให้ใช้ AI
                 $aiReply = $this->callAI($message, $userName);
                 if ($aiReply) {
-                    $this->log($roomId, $message, $userName, $aiReply, 'ai', $result['id'], $latency);
+                    $this->log($roomId, $message, $userName, $aiReply, 'ai', $result['id'], $latency, $convId);
                     return ['response' => $aiReply, 'type' => 'ai'];
                 }
                 // AI ล้มเหลว → fallback
                 $fallback = "ขออภัยครับ {$userName} ขณะนี้ระบบ AI ไม่พร้อมใช้งาน กรุณาติดต่อเจ้าหน้าที่โดยตรงครับ 🙏";
-                $this->log($roomId, $message, $userName, $fallback, 'fallback', null, $latency);
+                $this->log($roomId, $message, $userName, $fallback, 'fallback', null, $latency, $convId);
                 return ['response' => $fallback, 'type' => 'fallback'];
             }
 
             // Pattern reply ธรรมดา
             $reply = str_replace('{name}', $userName, $result['response']);
-            $this->log($roomId, $message, $userName, $reply, 'pattern', $result['id'], $latency);
+            $this->log($roomId, $message, $userName, $reply, 'pattern', $result['id'], $latency, $convId);
             $choices = null;
             if (!empty($result['choices'])) {
                 $decoded = json_decode($result['choices'], true);
@@ -105,7 +105,7 @@ class ChatBotEngine {
     // ══════════════════════════════════════════
     // PUBLIC: ตอบเมื่อรับรูปภาพ
     // ══════════════════════════════════════════
-    public function processImage(string $imgPath, string $userName, int $roomId): ?array {
+    public function processImage(string $imgPath, string $userName, int $roomId, string $convId = ''): ?array {
         if (!$this->isEnabled()) return null;
 
         $start  = microtime(true);
@@ -115,7 +115,7 @@ class ChatBotEngine {
             $aiReply = $this->callClaudeVision($imgPath, $userName);
             if ($aiReply) {
                 $latency = (int)((microtime(true) - $start) * 1000);
-                $this->log($roomId, "[IMAGE:$imgPath]", $userName, $aiReply, 'ai', null, $latency);
+                $this->log($roomId, "[IMAGE:$imgPath]", $userName, $aiReply, 'ai', null, $latency, $convId);
                 return ['response' => $aiReply, 'type' => 'ai'];
             }
         }
@@ -124,14 +124,14 @@ class ChatBotEngine {
                ?? "ขอบคุณสำหรับรูปภาพนะครับ {name} 📷\nทีมงานจะตรวจสอบและติดต่อกลับโดยเร็วที่สุดครับ 🙏";
         $reply = str_replace('{name}', $userName, $tpl);
         $latency = (int)((microtime(true) - $start) * 1000);
-        $this->log($roomId, "[IMAGE:$imgPath]", $userName, $reply, 'pattern', null, $latency);
+        $this->log($roomId, "[IMAGE:$imgPath]", $userName, $reply, 'pattern', null, $latency, $convId);
         return ['response' => $reply, 'type' => 'pattern'];
     }
 
     // ══════════════════════════════════════════
     // PUBLIC: ตอบเมื่อรับตำแหน่ง
     // ══════════════════════════════════════════
-    public function processLocation(array $loc, string $userName, int $roomId): ?array {
+    public function processLocation(array $loc, string $userName, int $roomId, string $convId = ''): ?array {
         if (!$this->isEnabled()) return null;
 
         $start   = microtime(true);
@@ -145,7 +145,7 @@ class ChatBotEngine {
             $tpl
         );
         $latency = (int)((microtime(true) - $start) * 1000);
-        $this->log($roomId, "[LOCATION:{$loc['lat']},{$loc['lng']}]", $userName, $reply, 'pattern', null, $latency);
+        $this->log($roomId, "[LOCATION:{$loc['lat']},{$loc['lng']}]", $userName, $reply, 'pattern', null, $latency, $convId);
         return ['response' => $reply, 'type' => 'pattern'];
     }
 
@@ -324,11 +324,13 @@ class ChatBotEngine {
         int $delayMs = 0, ?string $metadata = null, ?string $conversationId = null
     ): void {
         if ($delayMs > 0) usleep($delayMs * 1000);
+        // If response starts with < it's a rich HTML card — render without escaping in widget
+        $msgType = (!empty($response) && $response[0] === '<') ? 'rich' : 'text';
         $db->prepare("
             INSERT INTO chat_messages
               (room_id, conversation_id, username, display_name, avatar_color, message, msg_type, metadata)
-            VALUES (?, ?, 'chatbot', ?, ?, ?, 'text', ?)
-        ")->execute([$roomId, $conversationId, $botName, $botColor, $response, $metadata]);
+            VALUES (?, ?, 'chatbot', ?, ?, ?, ?, ?)
+        ")->execute([$roomId, $conversationId, $botName, $botColor, $response, $msgType, $metadata]);
     }
 
     // ══════════════════════════════════════════
@@ -358,16 +360,14 @@ class ChatBotEngine {
     }
 
     // ══════════════════════════════════════════
-    // LOG
-    // ══════════════════════════════════════════
     private function log(int $roomId, string $trigger, string $user, string $response,
-                         string $type, ?int $patternId, int $latency): void {
+                         string $type, ?int $patternId, int $latency, string $convId = ''): void {
         try {
             $this->db->prepare("
                 INSERT INTO chat_bot_log
-                  (room_id, trigger_msg, user_name, bot_response, response_type, pattern_id, latency_ms)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ")->execute([$roomId, $trigger, $user, $response, $type, $patternId, $latency]);
+                  (room_id, conversation_id, trigger_msg, user_name, bot_response, response_type, pattern_id, latency_ms)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ")->execute([$roomId, $convId ?: null, $trigger, $user, $response, $type, $patternId, $latency]);
         } catch (Throwable) {}
     }
 

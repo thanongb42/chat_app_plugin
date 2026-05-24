@@ -64,7 +64,7 @@ switch ($action) {
     // (Verify token สำหรับ FB webhook setup)
     case 'facebook':
         if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-            $verifyToken = $notif->get('fb_verify_token', 'rangsitcity_verify');
+            $verifyToken = $notif->get('fb_verify_token', '');
             if (($_GET['hub_verify_token'] ?? '') === $verifyToken) {
                 echo $_GET['hub_challenge'] ?? '';
                 exit;

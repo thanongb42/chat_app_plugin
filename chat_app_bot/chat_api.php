@@ -123,7 +123,6 @@ try {
             $roomId = (int)($_GET['room_id'] ?? 1);
             $lastId = (int)($_GET['last_id'] ?? 0);
             $limit  = min((int)($_GET['limit'] ?? CHAT_MSG_LIMIT), 100);
-            // กรอง conversation_id เฉพาะตัวอักษร hex (ป้องกัน injection)
             $convId = preg_replace('/[^a-f0-9]/', '', $_GET['conversation_id'] ?? '');
 
             $pdo = getChatDB();
@@ -153,7 +152,37 @@ try {
                 $msgs = $stmt->fetchAll();
             }
 
-            jsonResponse(['success' => true, 'messages' => $msgs]);
+            // ─── Extra metadata ───────────────────────────────────
+            $adminReadId   = 0;
+            $operatorTyping = null;
+            $convStatus    = 'open';
+            $botEnabled    = true;
+            if ($convId) {
+                try {
+                    $meta = $pdo->prepare("SELECT admin_last_read_id, status, bot_enabled FROM chat_conversation_sessions WHERE conversation_id=?");
+                    $meta->execute([$convId]);
+                    $row = $meta->fetch();
+                    if ($row) {
+                        $adminReadId = (int)$row['admin_last_read_id'];
+                        $convStatus  = $row['status'];
+                        $botEnabled  = (bool)$row['bot_enabled'];
+                    }
+                } catch (Throwable) {}
+            }
+            try {
+                $tStmt = $pdo->prepare("SELECT display_name FROM chat_typing_status WHERE room_id=? AND is_admin=1 AND updated_at > DATE_SUB(NOW(), INTERVAL 5 SECOND) LIMIT 1");
+                $tStmt->execute([$roomId]);
+                $operatorTyping = $tStmt->fetchColumn() ?: null;
+            } catch (Throwable) {}
+
+            jsonResponse([
+                'success'         => true,
+                'messages'        => $msgs,
+                'admin_read_id'   => $adminReadId,
+                'operator_typing' => $operatorTyping,
+                'conv_status'     => $convStatus,
+                'bot_enabled'     => $botEnabled,
+            ]);
 
         // ─────────────────────────────────────
         // SEND MESSAGE
@@ -174,8 +203,22 @@ try {
                 jsonResponse(['success' => false, 'error' => 'ข้อความยาวเกินไป']);
             }
 
-            $pdo   = getChatDB();
+            $pdo    = getChatDB();
             $convId = $_SESSION['conversation_id'] ?? bin2hex(random_bytes(16));
+
+            // ─── Rate limiting: max 15 messages per user per 60 seconds ───
+            try {
+                $rlStmt = $pdo->prepare("SELECT COUNT(*) FROM chat_rate_limits WHERE user_id=? AND created_at > DATE_SUB(NOW(), INTERVAL 1 MINUTE)");
+                $rlStmt->execute([$user['id']]);
+                if ((int)$rlStmt->fetchColumn() >= 15) {
+                    jsonResponse(['success' => false, 'error' => 'ส่งข้อความถี่เกินไป กรุณารอสักครู่']);
+                }
+                $pdo->prepare("INSERT INTO chat_rate_limits (user_id, ip_address) VALUES (?,?)")
+                    ->execute([$user['id'], $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0']);
+                $pdo->exec("DELETE FROM chat_rate_limits WHERE created_at < DATE_SUB(NOW(), INTERVAL 5 MINUTE)");
+            } catch (Throwable) {} // rate limit table might not exist yet
+
+            // ─── Save message ────────────────────────────────────
             $stmt = $pdo->prepare("
                 INSERT INTO chat_messages (room_id, conversation_id, user_id, username, display_name, avatar_color, message)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -190,47 +233,72 @@ try {
             ]);
             $newId = $pdo->lastInsertId();
 
-            // ─── BOT + NOTIFICATION ───────────────────────────────
+            // ─── Update/Create conversation session ───────────────
             try {
-                require_once __DIR__ . '/chat_bot_engine.php';
-                require_once __DIR__ . '/notification_engine.php';
+                $pdo->prepare("INSERT INTO chat_conversation_sessions (conversation_id, room_id, user_id, user_name, status, last_message, last_msg_at)
+                               VALUES (?,?,?,?,'open',?,NOW())
+                               ON DUPLICATE KEY UPDATE last_message=VALUES(last_message), last_msg_at=NOW()")
+                    ->execute([$convId, $roomId, $user['id'], $user['display_name'], mb_substr($message, 0, 200)]);
+            } catch (Throwable) {}
 
-                $bot    = new ChatBotEngine($pdo);
-                $notif  = new NotificationEngine($pdo);
-                $result = $bot->process($message, $user['display_name'], $roomId);
+            // ─── Clear user typing status ─────────────────────────
+            try {
+                $pdo->prepare("DELETE FROM chat_typing_status WHERE room_id=? AND username=? AND is_admin=0")
+                    ->execute([$roomId, $user['username']]);
+            } catch (Throwable) {}
 
-                // ดึงชื่อห้อง
-                $roomName = $pdo->prepare("SELECT name FROM chat_rooms WHERE id=?");
-                $roomName->execute([$roomId]);
-                $roomName = $roomName->fetchColumn() ?: "ห้อง #{$roomId}";
-
-                if ($result) {
-                    $metadata = null;
-                    if (!empty($result['choices'])) {
-                        $metadata = json_encode(
-                            ['choices' => $result['choices']],
-                            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-                        );
-                    }
-                    ChatBotEngine::insertBotMessage(
-                        $pdo, $roomId,
-                        $bot->getBotName(),
-                        $bot->getBotColor(),
-                        $result['response'],
-                        $bot->getDelayMs(),
-                        $metadata,
-                        $convId
-                    );
-                    // Bot fallback → แจ้งเตือน
-                    if ($result['type'] === 'fallback') {
-                        $notif->onBotFallback($message, $user['display_name'], $roomId, $roomName);
-                    }
-                } else {
-                    // ไม่มี bot reply เลย → แจ้งเตือน off-hours ถ้านอกเวลา
-                    $notif->onOffHoursMessage($message, $user['display_name'], $roomId, $roomName);
+            // ─── Check if in operator mode (skip bot) ────────────
+            $botEnabled = true;
+            try {
+                $modeStmt = $pdo->prepare("SELECT bot_enabled FROM chat_conversation_sessions WHERE conversation_id=? LIMIT 1");
+                $modeStmt->execute([$convId]);
+                $modeRow  = $modeStmt->fetch();
+                if ($modeRow && (int)$modeRow['bot_enabled'] === 0) {
+                    $botEnabled = false;
                 }
-            } catch (Throwable $e) {
-                error_log('ChatBot/Notification error: ' . $e->getMessage());
+            } catch (Throwable) {}
+
+            // ─── BOT + NOTIFICATION ───────────────────────────────
+            if ($botEnabled) {
+                try {
+                    require_once __DIR__ . '/chat_bot_engine.php';
+                    require_once __DIR__ . '/notification_engine.php';
+
+                    $bot    = new ChatBotEngine($pdo);
+                    $notif  = new NotificationEngine($pdo);
+                    $result = $bot->process($message, $user['display_name'], $roomId, $convId);
+
+                    // ดึงชื่อห้อง
+                    $roomName = $pdo->prepare("SELECT name FROM chat_rooms WHERE id=?");
+                    $roomName->execute([$roomId]);
+                    $roomName = $roomName->fetchColumn() ?: "ห้อง #{$roomId}";
+
+                    if ($result) {
+                        $metadata = null;
+                        if (!empty($result['choices'])) {
+                            $metadata = json_encode(
+                                ['choices' => $result['choices']],
+                                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+                            );
+                        }
+                        ChatBotEngine::insertBotMessage(
+                            $pdo, $roomId,
+                            $bot->getBotName(),
+                            $bot->getBotColor(),
+                            $result['response'],
+                            $bot->getDelayMs(),
+                            $metadata,
+                            $convId
+                        );
+                        if ($result['type'] === 'fallback') {
+                            $notif->onBotFallback($message, $user['display_name'], $roomId, $roomName);
+                        }
+                    } else {
+                        $notif->onOffHoursMessage($message, $user['display_name'], $roomId, $roomName);
+                    }
+                } catch (Throwable $e) {
+                    error_log('ChatBot/Notification error: ' . $e->getMessage());
+                }
             }
             // ─────────────────────────────────────────────────────
 
@@ -326,7 +394,7 @@ try {
             try {
                 require_once __DIR__ . '/chat_bot_engine.php';
                 $bot    = new ChatBotEngine($pdo);
-                $result = $bot->processImage($imgPath, $user['display_name'], $roomId);
+                $result = $bot->processImage($imgPath, $user['display_name'], $roomId, $convId);
                 if ($result) {
                     ChatBotEngine::insertBotMessage(
                         $pdo, $roomId, $bot->getBotName(), $bot->getBotColor(),
@@ -367,7 +435,7 @@ try {
             try {
                 require_once __DIR__ . '/chat_bot_engine.php';
                 $bot    = new ChatBotEngine($pdo);
-                $result = $bot->processLocation($locArr, $user['display_name'], $roomId);
+                $result = $bot->processLocation($locArr, $user['display_name'], $roomId, $convId);
                 if ($result) {
                     ChatBotEngine::insertBotMessage(
                         $pdo, $roomId, $bot->getBotName(), $bot->getBotColor(),
@@ -416,23 +484,26 @@ try {
             $pdo  = getChatDB();
             $stmt = $pdo->prepare("
                 SELECT
-                    m.conversation_id,
-                    m.room_id,
-                    r.name AS room_name,
-                    DATE_FORMAT(MIN(m.created_at),'%d/%m/%Y %H:%i') AS started_at,
-                    DATE_FORMAT(MAX(m.created_at),'%d/%m/%Y %H:%i') AS last_at,
-                    COUNT(*)                                          AS msg_count,
-                    (SELECT m2.message FROM chat_messages m2
-                     WHERE m2.conversation_id = m.conversation_id
-                       AND m2.username NOT IN ('chatbot','system','admin_staff')
-                     ORDER BY m2.id ASC LIMIT 1)                     AS first_msg
-                FROM chat_messages m
-                INNER JOIN chat_users u  ON u.username = m.username AND u.device_id = ?
-                INNER JOIN chat_rooms r  ON r.id = m.room_id
-                WHERE m.conversation_id IS NOT NULL
-                GROUP BY m.conversation_id, m.room_id
-                ORDER BY MAX(m.created_at) DESC
-                LIMIT 30
+                    cs.conversation_id,
+                    cs.room_id,
+                    COALESCE(r.name, 'ทั่วไป')                           AS room_name,
+                    DATE_FORMAT(cs.created_at,  '%d/%m/%Y %H:%i')       AS started_at,
+                    DATE_FORMAT(
+                        COALESCE(cs.last_msg_at, cs.created_at),
+                        '%d/%m/%Y %H:%i')                                AS last_at,
+                    (SELECT COUNT(*) FROM chat_messages cm
+                     WHERE cm.conversation_id = cs.conversation_id)      AS msg_count,
+                    (SELECT cm2.message FROM chat_messages cm2
+                     WHERE cm2.conversation_id = cs.conversation_id
+                       AND cm2.username NOT IN ('chatbot','system','admin_staff')
+                     ORDER BY cm2.id ASC LIMIT 1)                        AS first_msg
+                FROM chat_conversation_sessions cs
+                LEFT JOIN chat_rooms r ON r.id = cs.room_id
+                WHERE cs.user_id IN (
+                    SELECT id FROM chat_users WHERE device_id = ?
+                )
+                ORDER BY COALESCE(cs.last_msg_at, cs.created_at) DESC
+                LIMIT 20
             ");
             $stmt->execute([$deviceId]);
             jsonResponse(['success' => true, 'conversations' => $stmt->fetchAll()]);
@@ -448,9 +519,9 @@ try {
             $pdo = getChatDB();
             // ตรวจว่า device นี้เป็นเจ้าของ conversation จริง
             $chk = $pdo->prepare("
-                SELECT COUNT(*) FROM chat_messages m
-                INNER JOIN chat_users u ON u.username = m.username
-                WHERE m.conversation_id = ? AND u.device_id = ?
+                SELECT COUNT(*) FROM chat_conversation_sessions cs
+                INNER JOIN chat_users u ON u.id = cs.user_id
+                WHERE cs.conversation_id = ? AND u.device_id = ?
             ");
             $chk->execute([$convId, $deviceId]);
             if ((int)$chk->fetchColumn() === 0) jsonResponse(['success' => false, 'error' => 'ไม่พบประวัติ'], 403);
@@ -470,6 +541,78 @@ try {
             $pdo   = getChatDB();
             $items = $pdo->query("SELECT id, icon, label, message_text FROM chat_menu_items WHERE is_active=1 ORDER BY sort_order ASC, id ASC")->fetchAll();
             jsonResponse(['success' => true, 'items' => $items]);
+
+        case 'widget_config':
+            $pdo  = getChatDB();
+            $cfg  = $pdo->query("SELECT key_name, value FROM chat_bot_config WHERE key_name IN ('bot_name','bot_color','site_logo','welcome_title','welcome_sub','bot_sub')")->fetchAll(PDO::FETCH_KEY_PAIR);
+            jsonResponse(['success' => true, 'config' => $cfg]);
+
+        // ─────────────────────────────────────
+        // USER TYPING STATUS
+        // ─────────────────────────────────────
+        case 'typing':
+            if (empty($_SESSION[CHAT_SESSION_NAME])) jsonResponse(['success' => false]);
+            $user     = $_SESSION[CHAT_SESSION_NAME];
+            $roomId   = (int)($_POST['room_id'] ?? 1);
+            $isTyping = (int)($_POST['is_typing'] ?? 0);
+            try {
+                $pdo = getChatDB();
+                if ($isTyping) {
+                    $pdo->prepare("INSERT INTO chat_typing_status (room_id, username, display_name, is_admin) VALUES (?,?,?,0) ON DUPLICATE KEY UPDATE display_name=?, updated_at=NOW()")
+                        ->execute([$roomId, $user['username'], $user['display_name'], $user['display_name']]);
+                } else {
+                    $pdo->prepare("DELETE FROM chat_typing_status WHERE room_id=? AND username=? AND is_admin=0")
+                        ->execute([$roomId, $user['username']]);
+                }
+            } catch (Throwable) {}
+            jsonResponse(['success' => true]);
+
+        // ─────────────────────────────────────
+        // OPERATOR PRESENCE
+        // ─────────────────────────────────────
+        case 'operator_presence':
+            try {
+                $pdo   = getChatDB();
+                $avail = (int)$pdo->query("SELECT COUNT(*) FROM admin_users WHERE is_available=1 AND is_active=1")->fetchColumn();
+                jsonResponse(['success' => true, 'available' => $avail > 0, 'count' => $avail]);
+            } catch (Throwable) {
+                jsonResponse(['success' => true, 'available' => false, 'count' => 0]);
+            }
+
+        // ─────────────────────────────────────
+        // CSAT RATING SUBMIT
+        // ─────────────────────────────────────
+        case 'rate_csat':
+            if (empty($_SESSION[CHAT_SESSION_NAME])) jsonResponse(['success' => false, 'error' => 'กรุณาเข้าสู่ระบบ'], 401);
+            $user    = $_SESSION[CHAT_SESSION_NAME];
+            $rating  = max(1, min(5, (int)($_POST['rating'] ?? 5)));
+            $comment = mb_substr(trim($_POST['comment'] ?? ''), 0, 500);
+            $convId  = preg_replace('/[^a-f0-9]/', '', $_POST['conversation_id'] ?? ($_SESSION['conversation_id'] ?? ''));
+            $roomId  = (int)($_POST['room_id'] ?? 1);
+            try {
+                $pdo = getChatDB();
+                $pdo->prepare("INSERT INTO chat_csat_ratings (conversation_id, room_id, user_name, rating, comment) VALUES (?,?,?,?,?)")
+                    ->execute([$convId, $roomId, $user['display_name'], $rating, $comment]);
+                jsonResponse(['success' => true]);
+            } catch (Throwable $e) {
+                jsonResponse(['success' => false, 'error' => 'บันทึกไม่ได้']);
+            }
+
+        // ─────────────────────────────────────
+        // CONVERSATION INFO
+        // ─────────────────────────────────────
+        case 'conv_info':
+            $convId = preg_replace('/[^a-f0-9]/', '', $_GET['conversation_id'] ?? '');
+            if (!$convId) jsonResponse(['success' => false]);
+            try {
+                $pdo  = getChatDB();
+                $stmt = $pdo->prepare("SELECT status, bot_enabled, assigned_name FROM chat_conversation_sessions WHERE conversation_id=?");
+                $stmt->execute([$convId]);
+                $info = $stmt->fetch() ?: ['status' => 'open', 'bot_enabled' => 1, 'assigned_name' => null];
+                jsonResponse(['success' => true, 'info' => $info]);
+            } catch (Throwable) {
+                jsonResponse(['success' => true, 'info' => ['status' => 'open', 'bot_enabled' => 1]]);
+            }
 
         default:
             jsonResponse(['error' => 'Unknown action'], 400);

@@ -198,7 +198,8 @@ class NotificationEngine {
             'unanswered' => '[เทศบาล] ⏰ ข้อความรอตอบนานเกินกำหนด',
             default      => '[เทศบาล] แจ้งเตือนจาก Chat Bot',
         };
-        $headers = "Content-Type: text/plain; charset=UTF-8\r\nFrom: noreply@rangsitcity.go.th";
+        $fromEmail = $this->get('notify_from_email', 'noreply@chatbot.local');
+        $headers = "Content-Type: text/plain; charset=UTF-8\r\nFrom: $fromEmail";
         @mail($to, '=?UTF-8?B?' . base64_encode($subject) . '?=', $msg, $headers);
     }
 

@@ -12,7 +12,7 @@ $roomId = max(1, $roomId);
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>RungsitBot</title>
+<title>ChatBot</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -49,36 +49,35 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',Tahoma,sans-serif;b
 #new-chat-btn:active{transform:scale(.93)}
 #new-chat-btn title{display:none}
 
-/* ─── Room tabs ─── */
-#rooms{
-  display:flex;gap:0;border-bottom:1px solid var(--border);
-  overflow-x:auto;scrollbar-width:none;background:var(--surface);
-}
-#rooms::-webkit-scrollbar{display:none}
-.room-tab{
-  padding:7px 14px;font-size:11px;white-space:nowrap;cursor:pointer;
-  border-bottom:2px solid transparent;color:var(--text2);transition:.2s;
-  flex-shrink:0;
-}
-.room-tab:hover{color:var(--accentL)}
-.room-tab.active{color:var(--accentL);border-bottom-color:var(--accentL);font-weight:600}
 
 /* ─── Login overlay ─── */
 #loginOverlay{
-  position:absolute;inset:0;background:rgba(15,25,35,.97);
+  position:absolute;inset:0;background:rgba(13,17,23,.97);
+  display:flex;flex-direction:column;justify-content:center;
+  padding:20px 18px;z-index:100;gap:0;
+}
+.lo-header{display:flex;align-items:center;gap:10px;margin-bottom:18px}
+.lo-av{width:40px;height:40px;border-radius:50%;background:var(--accent);
   display:flex;align-items:center;justify-content:center;
-  flex-direction:column;gap:14px;padding:24px;z-index:100;
-}
-#loginOverlay h3{font-size:15px;color:var(--accentL);text-align:center}
-#loginOverlay p{font-size:11px;color:var(--text2);text-align:center;line-height:1.5}
+  font-size:20px;flex-shrink:0;box-shadow:0 0 0 3px rgba(21,101,192,.3)}
+.lo-bot-name{font-size:13px;font-weight:700;color:var(--text)}
+.lo-bot-sub{font-size:10px;color:var(--text2)}
+.lo-bubble{background:var(--surface);border:1px solid var(--border);
+  border-radius:4px 14px 14px 14px;padding:11px 14px;
+  font-size:13px;color:var(--text);line-height:1.6;margin-bottom:6px}
+.lo-bubble-hint{font-size:10px;color:var(--muted);margin-bottom:16px;padding-left:2px}
+.lo-anon-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.lo-anon-chip{padding:4px 11px;border-radius:20px;border:1px solid var(--border);
+  background:var(--surface2);color:var(--text2);font-size:11px;cursor:pointer;transition:.15s}
+.lo-anon-chip:hover{border-color:var(--accentL);color:var(--accentL)}
 #nameInput{
-  width:100%;padding:9px 12px;border-radius:8px;
-  border:1px solid var(--accent2);background:var(--surface2);
-  color:var(--text);font-size:13px;outline:none;
+  width:100%;padding:10px 13px;border-radius:10px;
+  border:1px solid var(--border);background:var(--surface2);
+  color:var(--text);font-size:13px;outline:none;margin-bottom:10px;
 }
-#nameInput:focus{border-color:var(--accentL)}
+#nameInput:focus{border-color:var(--accentL);box-shadow:0 0 0 2px rgba(66,165,245,.15)}
 #loginBtn{
-  width:100%;padding:9px;border-radius:8px;border:none;
+  width:100%;padding:10px;border-radius:10px;border:none;
   background:var(--accent);color:#fff;font-size:13px;
   font-weight:600;cursor:pointer;transition:.2s;
 }
@@ -94,9 +93,9 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',Tahoma,sans-serif;b
 #msgArea::-webkit-scrollbar-track{background:transparent}
 #msgArea::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
 
-.msg{display:flex;gap:8px;align-items:flex-end;animation:fadeIn .25s ease}
+.msg{display:flex;gap:8px;align-items:flex-end;width:100%;animation:fadeIn .25s ease}
 @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-.msg.own{flex-direction:row-reverse}
+.msg.own{justify-content:flex-end}
 .msg.sys{justify-content:center}
 
 .avatar{
@@ -114,6 +113,16 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',Tahoma,sans-serif;b
 .msg.own   .bubble{background:var(--user);  border-radius:12px 3px 12px 12px}
 .msg.bot   .bubble{background:var(--bot);   border-radius:3px 12px 12px 12px;border-left:2px solid var(--accentL)}
 .msg.sys   .bubble{background:var(--sys);font-size:10px;color:var(--text2);border-radius:8px;padding:4px 10px;font-style:italic}
+/* ─── Rich HTML card inside bubble ─── */
+.bubble a{color:var(--accentL);text-decoration:none}
+.bubble a:hover{text-decoration:underline}
+.rich-card{font-size:11px;line-height:1.65;color:var(--text)}
+.rich-section{background:rgba(255,255,255,.05);border-radius:8px;padding:8px 10px;margin-bottom:8px}
+.rich-section:last-child{margin-bottom:0}
+.rich-section-title{font-weight:700;margin-bottom:4px}
+.rich-meta{color:var(--text2);font-size:10px;margin-top:2px}
+.rich-nav-btn{display:inline-flex;align-items:center;gap:4px;background:var(--accent);color:#fff;padding:5px 10px;border-radius:6px;text-decoration:none;font-size:10px;font-weight:600;margin-top:6px}
+.rich-nav-btn:hover{background:var(--accentL);text-decoration:none;color:#fff}
 
 .msg-meta{font-size:9px;color:var(--text2);margin-top:2px;text-align:right}
 .msg.other .msg-meta,.msg.bot .msg-meta{text-align:left}
@@ -132,28 +141,6 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',Tahoma,sans-serif;b
 .wp-logo{font-size:46px;margin-bottom:10px;filter:drop-shadow(0 2px 8px rgba(66,165,245,.3))}
 .wp-title{font-size:17px;font-weight:700;color:var(--text);margin-bottom:5px}
 .wp-sub{font-size:12px;color:var(--text2);line-height:1.6}
-.wp-list{
-  width:100%;border:1px solid var(--border);border-radius:12px;
-  overflow:hidden;background:var(--surface);
-}
-.wp-item{
-  display:flex;align-items:center;gap:10px;width:100%;
-  padding:12px 14px;border:none;border-bottom:1px solid var(--border);
-  background:none;color:var(--text);font-family:inherit;font-size:12px;
-  text-align:left;cursor:pointer;transition:.15s;box-sizing:border-box;
-}
-.wp-item:last-child{border-bottom:none}
-.wp-item:hover{background:var(--surface2)}
-.wp-item:active{background:rgba(66,165,245,.08)}
-.wp-icon{font-size:17px;flex-shrink:0}
-.wp-text{flex:1;line-height:1.4}
-.wp-arrow{
-  width:22px;height:22px;border-radius:50%;flex-shrink:0;
-  background:var(--surface2);border:1px solid var(--border);
-  display:flex;align-items:center;justify-content:center;
-  font-size:11px;color:var(--text2);transition:.15s;font-style:normal;
-}
-.wp-item:hover .wp-arrow{background:var(--accent);border-color:var(--accent);color:#fff}
 
 /* ─── Chip bar (pinned above inputBar, ไม่ scroll ตาม welcome panel) ─── */
 #wp-chips-bar{
@@ -337,7 +324,7 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',Tahoma,sans-serif;b
   border-top:1px solid var(--border);background:var(--surface);
 }
 #menuBtn{
-  width:34px;height:34px;border-radius:50%;
+  height:34px;padding:0 10px;border-radius:17px;
   border:1px solid var(--border);background:var(--surface2);
   color:var(--accentL);cursor:pointer;
   display:flex;align-items:center;justify-content:center;
@@ -363,6 +350,49 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',Tahoma,sans-serif;b
 
 /* ─── Layout wrapper ─── */
 #app{display:flex;flex-direction:column;height:100%;position:relative}
+
+/* ─── Typing indicator ─── */
+#typing-indicator{display:none;padding:0 10px 6px;flex-shrink:0;pointer-events:none}
+.typing-wrap{display:inline-flex;align-items:center;gap:7px;background:var(--bot);padding:6px 12px;border-radius:10px;font-size:11px;color:var(--text2);border-left:2px solid var(--accentL)}
+.typing-dots{display:flex;gap:3px;align-items:center}
+.typing-dots span{width:5px;height:5px;border-radius:50%;background:var(--accentL);display:inline-block;animation:typingBounce .9s ease infinite}
+.typing-dots span:nth-child(2){animation-delay:.15s}
+.typing-dots span:nth-child(3){animation-delay:.3s}
+@keyframes typingBounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
+
+/* ─── Read receipts ─── */
+.read-receipt{font-size:9px;margin-left:3px;vertical-align:middle}
+.read-receipt.read{color:var(--accentL)}
+.read-receipt.sent{color:var(--text2)}
+
+/* ─── Operator status badge ─── */
+#op-badge{display:none;font-size:9px;padding:1px 6px;border-radius:8px;font-weight:600;margin-left:4px;vertical-align:middle}
+#op-badge.online{background:rgba(46,160,67,.25);color:#4caf50;border:1px solid rgba(76,175,80,.4)}
+#op-badge.bot-only{background:rgba(66,165,245,.15);color:var(--accentL);border:1px solid rgba(66,165,245,.3)}
+
+/* ─── Conversation status bar ─── */
+#conv-status-bar{display:none;padding:5px 12px;font-size:11px;text-align:center;flex-shrink:0}
+#conv-status-bar.operator{background:rgba(46,160,67,.1);color:#4caf50;border-bottom:1px solid rgba(76,175,80,.2)}
+#conv-status-bar.resolved{background:rgba(210,153,34,.1);color:#e3b341;border-bottom:1px solid rgba(210,153,34,.2)}
+
+/* ─── CSAT Modal ─── */
+#csat-overlay{position:absolute;inset:0;background:rgba(15,25,35,.95);z-index:300;display:none;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+#csat-overlay.open{display:flex}
+.csat-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px 20px;width:100%;max-width:300px;text-align:center}
+.csat-title{font-size:15px;font-weight:700;margin-bottom:6px;color:var(--text)}
+.csat-sub{font-size:12px;color:var(--text2);margin-bottom:18px;line-height:1.5}
+.csat-stars{display:flex;justify-content:center;gap:8px;margin-bottom:16px}
+.csat-star{font-size:28px;cursor:pointer;transition:.15s;opacity:.35;filter:grayscale(1)}
+.csat-star.active,.csat-star:hover~.csat-star,.csat-stars:hover .csat-star:hover{opacity:1;filter:none}
+.csat-stars:hover .csat-star{opacity:.35;filter:grayscale(1)}
+.csat-stars:hover .csat-star:hover,.csat-stars:hover .csat-star:hover~.csat-star{opacity:.35;filter:grayscale(1)}
+.csat-stars .csat-star:hover,.csat-stars .csat-star:hover~*{opacity:1!important;filter:none!important}
+.csat-comment{width:100%;margin-bottom:14px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;font-family:inherit;resize:none;min-height:60px;outline:none}
+.csat-comment:focus{border-color:var(--accentL)}
+.csat-submit{width:100%;padding:9px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer;transition:.15s;margin-bottom:8px}
+.csat-submit:hover{background:var(--accent2)}
+.csat-skip{background:none;border:none;color:var(--text2);font-size:11px;cursor:pointer;font-family:inherit;text-decoration:underline}
+.csat-skip:hover{color:var(--text)}
 </style>
 </head>
 <body>
@@ -370,19 +400,34 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',Tahoma,sans-serif;b
 
   <!-- Login overlay -->
   <div id="loginOverlay">
-    <div style="font-size:32px">🏛️</div>
-    <h3>เทศบาลนครรังสิต<br>บริการออนไลน์</h3>
-    <p>กรุณาระบุชื่อของท่าน<br>เพื่อเริ่มพูดคุยกับเจ้าหน้าที่</p>
-    <input id="nameInput" type="text" placeholder="ชื่อ-นามสกุล หรือชื่อเล่น" maxlength="50" autocomplete="off">
-    <button id="loginBtn">เริ่มสนทนา →</button>
+    <div class="lo-header">
+      <div class="lo-av">🤖</div>
+      <div>
+        <div class="lo-bot-name">น้องรังสิตา</div>
+        <div class="lo-bot-sub">เทศบาลนครรังสิต · ออนไลน์</div>
+      </div>
+    </div>
+    <div class="lo-bubble">
+      สวัสดีค่ะ 😊 ยินดีต้อนรับสู่บริการออนไลน์เทศบาลนครรังสิต<br>
+      <strong>ให้หนูเรียกคุณพี่ว่าอะไรดีคะ?</strong>
+    </div>
+    <div class="lo-bubble-hint">ระบุชื่อจริง ชื่อเล่น หรือนิรนามก็ได้ค่ะ</div>
+    <div class="lo-anon-chips">
+      <span class="lo-anon-chip" onclick="pickAnon('นิรนาม')">นิรนาม</span>
+      <span class="lo-anon-chip" onclick="pickAnon('ผู้ใช้งาน')">ผู้ใช้งาน</span>
+      <span class="lo-anon-chip" onclick="pickAnon('บุคคลทั่วไป')">บุคคลทั่วไป</span>
+      <span class="lo-anon-chip" onclick="pickAnon('ไม่ระบุชื่อ')">ไม่ระบุชื่อ</span>
+    </div>
+    <input id="nameInput" type="text" placeholder="พิมพ์ชื่อที่นี่..." maxlength="50" autocomplete="off">
+    <button id="loginBtn">เริ่มสนทนาเลย →</button>
   </div>
 
   <!-- Header -->
   <div id="hdr">
-    <div class="bot-avatar">🏛️</div>
+    <div class="bot-avatar" id="hdr-avatar">🏛️</div>
     <div class="info">
-      <div class="name">RungsitBot — เทศบาลนครรังสิต</div>
-      <div class="sub">ตอบคำถามอัตโนมัติ · โทร 0 2567 6000</div>
+      <div class="name" id="hdr-name">ChatBot</div>
+      <div class="sub" id="hdr-sub">ตอบคำถามอัตโนมัติ<span id="op-badge"></span></div>
     </div>
     <button id="hist-btn" onclick="openHistory()" title="ประวัติการสนทนา" style="width:30px;height:30px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.12);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;transition:.2s;padding:0">
       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
@@ -397,22 +442,14 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',Tahoma,sans-serif;b
     <div class="online-dot" title="ออนไลน์"></div>
   </div>
 
-  <!-- Room tabs -->
-  <div id="rooms">
-    <div class="room-tab active" data-id="1">💬 ถามตอบทั่วไป</div>
-    <div class="room-tab" data-id="2">📢 ประกาศ</div>
-    <div class="room-tab" data-id="3">❓ ถาม-ตอบ</div>
-  </div>
+
 
   <!-- Welcome panel — suggestion list (scrollable) -->
   <div id="welcome-panel">
     <div class="wp-hero">
-      <div class="wp-logo">🏛️</div>
-      <div class="wp-title">สวัสดีครับ 👋</div>
-      <div class="wp-sub">ยินดีต้อนรับสู่บริการออนไลน์<br>เทศบาลนครรังสิต</div>
-    </div>
-    <div class="wp-list" id="wp-list">
-      <div style="text-align:center;padding:20px;color:var(--text2);font-size:12px">กำลังโหลด...</div>
+      <div class="wp-logo" id="wp-logo">🏛️</div>
+      <div class="wp-title" id="wp-title">สวัสดีครับ 👋</div>
+      <div class="wp-sub" id="wp-sub">ยินดีต้อนรับสู่บริการออนไลน์<br>เทศบาลนครรังสิต</div>
     </div>
   </div>
 
@@ -421,8 +458,37 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',Tahoma,sans-serif;b
     <div class="wp-chips" id="wp-chips"></div>
   </div>
 
+  <!-- Conversation status bar (operator took over / resolved) -->
+  <div id="conv-status-bar"></div>
+
   <!-- Messages -->
   <div id="msgArea"></div>
+
+  <!-- Typing indicator -->
+  <div id="typing-indicator">
+    <div class="typing-wrap">
+      <div class="typing-dots"><span></span><span></span><span></span></div>
+      <span id="typing-who">เจ้าหน้าที่กำลังพิมพ์...</span>
+    </div>
+  </div>
+
+  <!-- CSAT overlay -->
+  <div id="csat-overlay">
+    <div class="csat-box">
+      <div class="csat-title">⭐ ความพึงพอใจในการให้บริการ</div>
+      <div class="csat-sub">กรุณาให้คะแนนการสนทนาครั้งนี้<br>เพื่อพัฒนาคุณภาพการให้บริการ</div>
+      <div class="csat-stars" id="csat-stars">
+        <span class="csat-star" data-v="1">⭐</span>
+        <span class="csat-star" data-v="2">⭐</span>
+        <span class="csat-star" data-v="3">⭐</span>
+        <span class="csat-star" data-v="4">⭐</span>
+        <span class="csat-star" data-v="5">⭐</span>
+      </div>
+      <textarea id="csat-comment" class="csat-comment" placeholder="ความคิดเห็นเพิ่มเติม (ไม่บังคับ)"></textarea>
+      <button class="csat-submit" id="csat-submit-btn" onclick="submitCsat()">ส่งคะแนน</button>
+      <button class="csat-skip" onclick="closeCsat()">ข้ามขั้นตอนนี้</button>
+    </div>
+  </div>
 
   <!-- Quick menu panel (slides up above input bar) -->
   <div id="menuPanel">
@@ -486,7 +552,7 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',Tahoma,sans-serif;b
   <!-- Input -->
   <div id="inputBar">
     <input type="file" id="fileInput" accept="image/*" capture="environment" style="display:none">
-    <button id="menuBtn" title="เมนูลัด">☰</button>
+    <button id="menuBtn" title="เมนูลัด">เมนู</button>
     <button id="imgBtn" title="แนบรูปภาพ">📷</button>
     <button id="locBtn" title="ส่งตำแหน่ง">📍</button>
     <textarea id="msgInput" rows="1" placeholder="พิมพ์คำถามที่นี่... (Enter = ส่ง)"></textarea>
@@ -503,10 +569,16 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',Tahoma,sans-serif;b
 const API = 'chat_api.php';
 let currentRoom = 1, lastId = 0, pollTimer, heartTimer, currentUser = null;
 let conversationId = '', atBottom = true;
+let adminReadId = 0, _csatRating = 0, _typingTimer = null, _lastConvStatus = 'open';
 
 // ─── Login ───────────────────────────────────────
 document.getElementById('loginBtn').addEventListener('click', doLogin);
 document.getElementById('nameInput').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+
+function pickAnon(name) {
+  document.getElementById('nameInput').value = name;
+  document.getElementById('nameInput').focus();
+}
 
 async function doLogin() {
   const name = document.getElementById('nameInput').value.trim();
@@ -522,7 +594,6 @@ async function doLogin() {
 
 // ─── New Chat ─────────────────────────────────────
 async function newChat() {
-  if (menuOpen) toggleMenu();
   clearImgPreview();
 
   // สร้าง conversation_id ใหม่ฝั่ง server (session update)
@@ -558,18 +629,43 @@ async function startChat() {
 }
 
 async function loadWelcomeMsg() {
-  // ดึง welcome message จาก room 1
-}
+  try {
+    const r = await fetch(`${API}?action=widget_config`);
+    const d = await r.json();
+    if (!d.success) return;
+    const c = d.config || {};
 
-// ─── Room switch ──────────────────────────────────
-document.querySelectorAll('.room-tab').forEach(tab => {
-  tab.addEventListener('click', () => switchRoom(parseInt(tab.dataset.id)));
-});
+    // Logo
+    if (c.site_logo) {
+      const src = c.site_logo + '?v=' + Date.now();
+      document.getElementById('hdr-avatar').innerHTML =
+        `<img src="${src}" alt="logo" style="width:28px;height:28px;object-fit:contain;border-radius:6px">`;
+      document.getElementById('wp-logo').innerHTML =
+        `<img src="${src}" alt="logo" style="width:56px;height:56px;object-fit:contain;border-radius:14px;filter:drop-shadow(0 2px 12px rgba(66,165,245,.35))">`;
+    }
+
+    // Bot name + subtitle
+    if (c.bot_name) {
+      document.getElementById('hdr-name').textContent = c.bot_name;
+    }
+    if (c.bot_sub !== undefined) {
+      const badge = document.getElementById('op-badge').outerHTML;
+      document.getElementById('hdr-sub').innerHTML = (c.bot_sub || 'ตอบคำถามอัตโนมัติ') + badge;
+    }
+
+    // Welcome text
+    if (c.welcome_title) {
+      document.getElementById('wp-title').textContent = c.welcome_title;
+    }
+    if (c.welcome_sub) {
+      document.getElementById('wp-sub').innerHTML = c.welcome_sub.replace(/\n/g, '<br>');
+    }
+  } catch {}
+}
 
 function switchRoom(id) {
   currentRoom = id;
   lastId = 0;
-  document.querySelectorAll('.room-tab').forEach(t => t.classList.toggle('active', parseInt(t.dataset.id) === id));
   document.getElementById('msgArea').innerHTML = '';
   showWelcome();
   clearInterval(pollTimer);
@@ -580,6 +676,27 @@ function switchRoom(id) {
 // ─── Polling ──────────────────────────────────────
 async function pollMessages() {
   const r = await api('messages', null, { room_id: currentRoom, last_id: lastId, conversation_id: conversationId, limit: 40 });
+  // Handle operator typing indicator
+  const typingEl = document.getElementById('typing-indicator');
+  if (r.operator_typing) {
+    document.getElementById('typing-who').textContent = r.operator_typing + ' กำลังพิมพ์...';
+    typingEl.style.display = 'block';
+  } else {
+    typingEl.style.display = 'none';
+  }
+  // Update admin read id for receipts
+  if ((r.admin_read_id || 0) > adminReadId) {
+    adminReadId = r.admin_read_id;
+    updateReadReceipts();
+  }
+  // Handle conversation status changes
+  if (r.conv_status && r.conv_status !== _lastConvStatus) {
+    _lastConvStatus = r.conv_status;
+    updateConvStatusBar(r.conv_status, r.bot_enabled);
+    if (r.conv_status === 'resolved') {
+      setTimeout(showCsatModal, 1500);
+    }
+  }
   if (!r.messages?.length) return;
   hideWelcome();
   const area = document.getElementById('msgArea');
@@ -601,8 +718,8 @@ function appendMessage(m) {
   if (isSys) {
     wrap.innerHTML = `<div class="bubble">${m.message}</div>`;
   } else {
-    const av = `<div class="avatar" style="background:${m.avatar_color}">${(m.display_name||'?')[0]}</div>`;
-    const senderRow = !isOwn ? `<div class="sender-name">${esc(isBot ? '🤖 RungsitBot' : m.display_name)}</div>` : '';
+    const av = `<div class="avatar" style="background:${m.avatar_color};color:${contrastColor(m.avatar_color)}">${(m.display_name||'?')[0]}</div>`;
+    const senderRow = !isOwn ? `<div class="sender-name">${esc(isBot ? `🤖 ${m.display_name}` : m.display_name)}</div>` : '';
 
     // render bubble content ตาม msg_type
     let bubbleContent;
@@ -625,6 +742,9 @@ function appendMessage(m) {
           <span class="loc-link">🗺️ เปิด Google Maps →</span>
         </a>`;
       } catch { bubbleContent = '📍 ตำแหน่ง (ข้อมูลผิดพลาด)'; }
+    } else if (m.msg_type === 'rich' && (isBot || m.username === 'admin_staff')) {
+      // Rich HTML card — trusted source only, never for user messages
+      bubbleContent = m.message;
     } else {
       bubbleContent = formatMsg(m.message);
     }
@@ -644,12 +764,15 @@ function appendMessage(m) {
       } catch {}
     }
 
+    const receiptHtml = isOwn
+      ? `<span class="read-receipt ${m.id <= adminReadId ? 'read' : 'sent'}" data-msg-id="${m.id}" title="${m.id <= adminReadId ? 'อ่านแล้ว' : 'ส่งแล้ว'}">${m.id <= adminReadId ? '✓✓' : '✓'}</span>`
+      : '';
     wrap.innerHTML = (isOwn ? '' : av) +
       `<div>
         ${senderRow}
         <div class="bubble">${bubbleContent}</div>
         ${choicesHtml}
-        <div class="msg-meta">${m.time_str||''}</div>
+        <div class="msg-meta">${m.time_str||''}${receiptHtml}</div>
       </div>` +
       (isOwn ? av : '');
   }
@@ -660,6 +783,11 @@ function esc(s) {
   return String(s)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;')
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function contrastColor(hex) {
+  const h = (hex||'#888').replace('#','');
+  const r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
+  return (0.299*r + 0.587*g + 0.114*b) > 140 ? '#1a1a1a' : '#ffffff';
 }
 function formatMsg(txt) {
   // escape HTML แล้วแปลง newline → <br>
@@ -721,7 +849,6 @@ document.getElementById('fileInput').addEventListener('change', function() {
     document.getElementById('img-pname').textContent = file.name;
     document.getElementById('img-psize').textContent = (file.size / 1024).toFixed(0) + ' KB';
     document.getElementById('img-preview-bar').style.display = 'flex';
-    if (menuOpen) toggleMenu();
   };
   reader.readAsDataURL(file);
 });
@@ -767,7 +894,6 @@ document.getElementById('locBtn').addEventListener('click', () => {
 
 async function openMapModal() {
   document.getElementById('map-modal').classList.add('open');
-  if (menuOpen) toggleMenu();
 
   // Lazy-load Leaflet from CDN
   if (!window.L) {
@@ -871,26 +997,15 @@ async function loadMenuItems() {
 
   if (!r.items?.length) {
     document.getElementById('menuBtn').style.display = 'none';
-    document.getElementById('wp-list').innerHTML =
-      '<div style="text-align:center;padding:20px;color:var(--text2);font-size:12px">ยังไม่มีเมนูลัด</div>';
     return;
   }
 
-  // ☰ grid menu (เดิม)
+  // menu grid (panel เมนูลัด)
   document.getElementById('menuGrid').innerHTML = r.items.map(item =>
     `<div class="menu-item" data-msg="${esc(item.message_text)}" onclick="sendMenuMsg(this.dataset.msg)">
        <span class="menu-icon">${esc(item.icon)}</span>
        <span class="menu-label">${esc(item.label)}</span>
      </div>`
-  ).join('');
-
-  // Welcome panel — suggestion list (↗ arrows)
-  document.getElementById('wp-list').innerHTML = r.items.map(item =>
-    `<button class="wp-item" data-msg="${esc(item.message_text)}" onclick="sendMenuMsg(this.dataset.msg)">
-       <span class="wp-icon">${esc(item.icon)}</span>
-       <span class="wp-text">${esc(item.label)}</span>
-       <i class="wp-arrow">↗</i>
-     </button>`
   ).join('');
 
   // Welcome panel — chip row (horizontal scroll)
@@ -899,16 +1014,24 @@ async function loadMenuItems() {
        ${esc(item.icon)} ${esc(item.label)}
      </button>`
   ).join('');
+
+  // Auto-open after items loaded
+  menuOpen = true;
+  document.getElementById('menuPanel').classList.add('open');
+  const btn = document.getElementById('menuBtn');
+  btn.classList.add('active');
+  btn.textContent = 'ซ่อนเมนู';
 }
 
 function toggleMenu() {
   menuOpen = !menuOpen;
   document.getElementById('menuPanel').classList.toggle('open', menuOpen);
-  document.getElementById('menuBtn').classList.toggle('active', menuOpen);
+  const btn = document.getElementById('menuBtn');
+  btn.classList.toggle('active', menuOpen);
+  btn.textContent = menuOpen ? 'ซ่อนเมนู' : 'เมนู';
 }
 
 async function sendMenuMsg(text) {
-  if (menuOpen) toggleMenu();
   const input = document.getElementById('msgInput');
   input.value = text;
   input.style.height = 'auto';
@@ -917,7 +1040,6 @@ async function sendMenuMsg(text) {
 }
 
 document.getElementById('menuBtn').addEventListener('click', toggleMenu);
-document.getElementById('msgArea').addEventListener('click', () => { if (menuOpen) toggleMenu(); });
 
 // ─── Device ID management ─────────────────────────
 let deviceId = '';
@@ -932,9 +1054,125 @@ function getOrCreateDeviceId() {
   return id;
 }
 
+// ─── Typing — send status to server (debounced) ──
+document.getElementById('msgInput').addEventListener('input', function() {
+  this.style.height = 'auto';
+  this.style.height = Math.min(this.scrollHeight, 80) + 'px';
+  if (!currentUser) return;
+  api('typing', { room_id: currentRoom, is_typing: 1 });
+  clearTimeout(_typingTimer);
+  _typingTimer = setTimeout(() => {
+    if (currentUser) api('typing', { room_id: currentRoom, is_typing: 0 });
+  }, 4000);
+});
+
+// ─── Update all read receipts in DOM ─────────────
+function updateReadReceipts() {
+  document.querySelectorAll('.read-receipt[data-msg-id]').forEach(el => {
+    const mid = parseInt(el.dataset.msgId);
+    if (mid <= adminReadId) {
+      el.textContent = '✓✓';
+      el.className = 'read-receipt read';
+      el.title = 'อ่านแล้ว';
+    }
+  });
+}
+
+// ─── Conversation status bar ──────────────────────
+function updateConvStatusBar(status, botEnabled) {
+  const bar = document.getElementById('conv-status-bar');
+  if (status === 'operator') {
+    bar.className = 'operator';
+    bar.textContent = '🙋 เจ้าหน้าที่รับสายแล้ว';
+    bar.style.display = 'block';
+  } else if (status === 'resolved') {
+    bar.className = 'resolved';
+    bar.textContent = '✅ การสนทนาสิ้นสุดแล้ว ขอบคุณที่ใช้บริการ';
+    bar.style.display = 'block';
+    // Disable input
+    document.getElementById('msgInput').disabled = true;
+    document.getElementById('sendBtn').disabled = true;
+    document.getElementById('imgBtn').disabled = true;
+    document.getElementById('locBtn').disabled = true;
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+// ─── Operator presence ────────────────────────────
+async function checkOperatorPresence() {
+  try {
+    const r = await api('operator_presence');
+    const badge = document.getElementById('op-badge');
+    if (r.available) {
+      badge.textContent = '🟢 มีเจ้าหน้าที่';
+      badge.className = 'online';
+      badge.style.display = 'inline';
+    } else {
+      badge.style.display = 'none';
+    }
+  } catch {}
+}
+
+// ─── CSAT ─────────────────────────────────────────
+let _csatShown = false;
+
+function showCsatModal() {
+  if (_csatShown) return;
+  _csatShown = true;
+  _csatRating = 0;
+  document.getElementById('csat-stars').querySelectorAll('.csat-star').forEach(s => s.classList.remove('active'));
+  document.getElementById('csat-comment').value = '';
+  document.getElementById('csat-overlay').classList.add('open');
+}
+
+function closeCsat() {
+  document.getElementById('csat-overlay').classList.remove('open');
+}
+
+async function submitCsat() {
+  if (_csatRating === 0) {
+    document.getElementById('csat-stars').style.animation = 'none';
+    setTimeout(() => document.getElementById('csat-stars').style.animation = '', 100);
+    return;
+  }
+  const btn = document.getElementById('csat-submit-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ กำลังส่ง...';
+  const r = await api('rate_csat', {
+    rating: _csatRating,
+    comment: document.getElementById('csat-comment').value,
+    conversation_id: conversationId,
+    room_id: currentRoom,
+  });
+  closeCsat();
+  if (r.success) {
+    // Show thank-you message in chat
+    const div = document.createElement('div');
+    div.className = 'msg sys';
+    div.innerHTML = '<div class="bubble">⭐ ขอบคุณสำหรับคะแนน ' + _csatRating + '/5 ดาวครับ 🙏</div>';
+    document.getElementById('msgArea').appendChild(div);
+  }
+}
+
+// Star rating handler
+document.getElementById('csat-stars').addEventListener('click', e => {
+  const star = e.target.closest('.csat-star');
+  if (!star) return;
+  _csatRating = parseInt(star.dataset.v);
+  document.getElementById('csat-stars').querySelectorAll('.csat-star').forEach((s, i) => {
+    s.classList.toggle('active', i < _csatRating);
+    s.style.opacity = i < _csatRating ? '1' : '0.35';
+    s.style.filter = i < _csatRating ? 'none' : 'grayscale(1)';
+  });
+});
+
 // ─── Init on page load ────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
   deviceId = getOrCreateDeviceId();
+  loadWelcomeMsg();
+  checkOperatorPresence();
+  setInterval(checkOperatorPresence, 30000);
 
   // 1. Check existing PHP session (page refresh)
   const sess = await api('check_session');
@@ -1022,7 +1260,7 @@ async function viewConversation(convId, dateLabel) {
       div.innerHTML = `<div class="bubble">${bubbleContent}</div>`;
     } else {
       const av  = `<div class="avatar" style="background:${m.avatar_color}">${(m.display_name||'?')[0]}</div>`;
-      const snm = m.username !== prevSender && !isOwn ? `<div class="sender-name">${esc(isBot?'🤖 RungsitBot':m.display_name)}</div>` : '';
+      const snm = m.username !== prevSender && !isOwn ? `<div class="sender-name">${esc(isBot?`🤖 ${m.display_name}`:m.display_name)}</div>` : '';
       div.innerHTML = (isOwn?'':av) + `<div>${snm}<div class="bubble">${bubbleContent}</div><div class="msg-meta">${m.time_str||''}</div></div>` + (isOwn?av:'');
     }
     msgEl.appendChild(div);
