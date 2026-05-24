@@ -1,0 +1,5 @@
+# Allow image files only
+<FilesMatch "(?i)\.(php|php3|php4|php5|phtml|pl|py|cgi|asp|aspx|shtml)$">
+    Require all denied
+</FilesMatch>
+Options -Indexes
