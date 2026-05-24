@@ -570,6 +570,7 @@ const API = 'chat_api.php';
 let currentRoom = 1, lastId = 0, pollTimer, heartTimer, currentUser = null;
 let conversationId = '', atBottom = true;
 let adminReadId = 0, _csatRating = 0, _typingTimer = null, _lastConvStatus = 'open';
+let _swReg = null, _vapidKey = null;
 
 // ─── Login ───────────────────────────────────────
 document.getElementById('loginBtn').addEventListener('click', doLogin);
@@ -589,6 +590,7 @@ async function doLogin() {
     conversationId = r.conversation_id || '';
     document.getElementById('loginOverlay').style.display = 'none';
     startChat();
+    subscribePush();
   }
 }
 
@@ -660,6 +662,8 @@ async function loadWelcomeMsg() {
     if (c.welcome_sub) {
       document.getElementById('wp-sub').innerHTML = c.welcome_sub.replace(/\n/g, '<br>');
     }
+    // เก็บ VAPID public key สำหรับ subscribe push
+    if (c.vapid_public_key) _vapidKey = c.vapid_public_key;
   } catch {}
 }
 
@@ -1167,10 +1171,39 @@ document.getElementById('csat-stars').addEventListener('click', e => {
   });
 });
 
+// ─── Web Push ─────────────────────────────────────
+function urlBase64ToUint8Array(b64) {
+  const pad  = '='.repeat((4 - b64.length % 4) % 4);
+  const raw  = atob((b64 + pad).replace(/-/g,'+').replace(/_/g,'/'));
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
+async function initServiceWorker() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    _swReg = await navigator.serviceWorker.register('sw.js');
+  } catch {}
+}
+
+async function subscribePush() {
+  if (!_swReg || !_vapidKey || !currentUser) return;
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') return;
+    const sub = await _swReg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(_vapidKey),
+    });
+    const j = sub.toJSON();
+    await api('push_subscribe', { endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth });
+  } catch {}
+}
+
 // ─── Init on page load ────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
   deviceId = getOrCreateDeviceId();
   loadWelcomeMsg();
+  initServiceWorker();
   checkOperatorPresence();
   setInterval(checkOperatorPresence, 30000);
 
@@ -1181,6 +1214,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     conversationId = sess.conversation_id || '';
     document.getElementById('loginOverlay').style.display = 'none';
     startChat();
+    subscribePush();
     return;
   }
 
@@ -1191,6 +1225,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     conversationId = dev.conversation_id || '';
     document.getElementById('loginOverlay').style.display = 'none';
     startChat();
+    subscribePush();
     return;
   }
 

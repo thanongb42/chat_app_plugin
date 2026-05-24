@@ -361,6 +361,18 @@ case 'send_admin':
         $pdo->prepare("DELETE FROM chat_typing_status WHERE room_id=? AND username=? AND is_admin=1")
             ->execute([$roomId, $adminUsername]);
     } catch(Throwable) {}
+    // ส่ง Web Push ให้ user ของ conversation นี้
+    if ($convId) {
+        try {
+            require_once __DIR__ . '/notification_engine.php';
+            $uStmt = $pdo->prepare("SELECT user_id FROM chat_conversation_sessions WHERE conversation_id=?");
+            $uStmt->execute([$convId]);
+            $userId = (int)$uStmt->fetchColumn();
+            if ($userId) {
+                (new NotificationEngine($pdo))->sendPushToUser($userId);
+            }
+        } catch(Throwable) {}
+    }
     ok(['id' => $newId]);
 
 // ── PATTERNS LIST ──────────────────────────────────

@@ -544,7 +544,7 @@ try {
 
         case 'widget_config':
             $pdo  = getChatDB();
-            $cfg  = $pdo->query("SELECT key_name, value FROM chat_bot_config WHERE key_name IN ('bot_name','bot_color','site_logo','welcome_title','welcome_sub','bot_sub')")->fetchAll(PDO::FETCH_KEY_PAIR);
+            $cfg  = $pdo->query("SELECT key_name, value FROM chat_bot_config WHERE key_name IN ('bot_name','bot_color','site_logo','welcome_title','welcome_sub','bot_sub','vapid_public_key')")->fetchAll(PDO::FETCH_KEY_PAIR);
             jsonResponse(['success' => true, 'config' => $cfg]);
 
         // ─────────────────────────────────────
@@ -612,6 +612,54 @@ try {
                 jsonResponse(['success' => true, 'info' => $info]);
             } catch (Throwable) {
                 jsonResponse(['success' => true, 'info' => ['status' => 'open', 'bot_enabled' => 1]]);
+            }
+
+        // ─────────────────────────────────────
+        // WEB PUSH — บันทึก subscription
+        // ─────────────────────────────────────
+        case 'push_subscribe':
+            if (empty($_SESSION[CHAT_SESSION_NAME])) jsonResponse(['success' => false, 'error' => 'not logged in']);
+            $user     = $_SESSION[CHAT_SESSION_NAME];
+            $endpoint = trim($_POST['endpoint'] ?? '');
+            $p256dh   = trim($_POST['p256dh']   ?? '');
+            $auth     = trim($_POST['auth']     ?? '');
+            if (!$endpoint || !$p256dh || !$auth) jsonResponse(['success' => false, 'error' => 'ข้อมูลไม่ครบ']);
+            try {
+                $pdo = getChatDB();
+                $pdo->prepare("
+                    INSERT INTO chat_push_subscriptions (user_id, endpoint, p256dh, auth)
+                    VALUES (?,?,?,?)
+                    ON DUPLICATE KEY UPDATE user_id=VALUES(user_id), p256dh=VALUES(p256dh), auth=VALUES(auth)
+                ")->execute([$user['id'], $endpoint, $p256dh, $auth]);
+                jsonResponse(['success' => true]);
+            } catch (Throwable) {
+                jsonResponse(['success' => false, 'error' => 'บันทึกไม่ได้']);
+            }
+
+        // ─────────────────────────────────────
+        // WEB PUSH — SW ดึงข้อความล่าสุดแสดงใน notification
+        // ─────────────────────────────────────
+        case 'push_notification_data':
+            if (empty($_SESSION[CHAT_SESSION_NAME])) jsonResponse(['success' => false]);
+            $user   = $_SESSION[CHAT_SESSION_NAME];
+            $convId = preg_replace('/[^a-f0-9]/', '', $_SESSION['conversation_id'] ?? '');
+            try {
+                $pdo  = getChatDB();
+                $cond = $convId ? ' AND conversation_id = ?' : '';
+                $stmt = $pdo->prepare("
+                    SELECT display_name, message FROM chat_messages
+                    WHERE username IN ('chatbot','admin_staff') {$cond}
+                    ORDER BY id DESC LIMIT 1
+                ");
+                $stmt->execute($convId ? [$convId] : []);
+                $row = $stmt->fetch();
+                jsonResponse([
+                    'success' => true,
+                    'sender'  => $row ? $row['display_name'] : 'น้องรังสิตา',
+                    'message' => $row ? mb_substr($row['message'], 0, 80) : 'มีข้อความใหม่',
+                ]);
+            } catch (Throwable) {
+                jsonResponse(['success' => true, 'message' => 'มีข้อความใหม่']);
             }
 
         default:

@@ -110,6 +110,35 @@ class NotificationEngine {
     }
 
     // ══════════════════════════════════════════════
+    // WEB PUSH — แจ้งเตือน user เมื่อ admin/bot ตอบ
+    // ══════════════════════════════════════════════
+
+    public function sendPushToUser(int $userId): void {
+        if (!$this->get('vapid_public_key') || !$this->get('vapid_private_pem')) return;
+        try {
+            require_once __DIR__ . '/web_push.php';
+            $subs = $this->db->prepare("SELECT endpoint, p256dh, auth FROM chat_push_subscriptions WHERE user_id=?");
+            $subs->execute([$userId]);
+            $rows = $subs->fetchAll();
+            if (!$rows) return;
+            $pub  = $this->get('vapid_public_key');
+            $pem  = $this->get('vapid_private_pem');
+            $subj = $this->get('vapid_subject', 'mailto:admin@localhost');
+            $dead = [];
+            foreach ($rows as $sub) {
+                $code = webpush_send(['endpoint' => $sub['endpoint'], 'p256dh' => $sub['p256dh'], 'auth' => $sub['auth']], $pub, $pem, $subj);
+                if ($code === 410 || $code === 404) $dead[] = $sub['endpoint'];
+            }
+            // ลบ subscription ที่หมดอายุ
+            foreach ($dead as $ep) {
+                $this->db->prepare("DELETE FROM chat_push_subscriptions WHERE endpoint=?")->execute([$ep]);
+            }
+        } catch (Throwable $e) {
+            error_log('sendPushToUser error: ' . $e->getMessage());
+        }
+    }
+
+    // ══════════════════════════════════════════════
     // DISPATCH — ส่งไปทุก channel ที่เปิดใช้งาน
     // ══════════════════════════════════════════════
     private function dispatch(string $msg, string $triggerType, int $roomId, string $userName, string $triggerMsg): void {
